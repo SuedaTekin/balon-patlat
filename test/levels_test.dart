@@ -38,4 +38,40 @@ void main() {
     expect(g.state, GameState.won);
     expect(g.stoneCount, 0);
   });
+
+  test('bomba balonlar 12. bölümden itibaren gelir ve renk sayılmaz', () {
+    expect(LevelConfig.forLevel(11).bombCount, 0);
+    expect(LevelConfig.forLevel(12).bombCount, greaterThan(0));
+    final g = BubbleGame(LevelConfig.forLevel(40))
+      ..layout(const Size(392, 640));
+    final bombs = g.grid.fold(
+      0,
+      (s, row) => s + row.where((v) => v == bombCell).length,
+    );
+    expect(bombs, greaterThan(0));
+    expect(isColor(bombCell), isFalse);
+    expect(g.pickColor(), lessThan(bubbleColors.length));
+  });
+
+  test('yanındaki balon patlayınca bomba iki halkayı temizler', () {
+    final g = BubbleGame(LevelConfig.forLevel(40))
+      ..layout(const Size(392, 640));
+    // ilk 5 sıra mavi, ortada bir bomba ve ikinci bir bomba (zincir için)
+    for (var row = 0; row < g.grid.length; row++) {
+      for (var c = 0; c < g.rowLen(row); c++) {
+        g.grid[row][c] = row < 5 ? 1 : null;
+      }
+    }
+    g.grid[2][3] = bombCell;
+    g.grid[2][6] = bombCell; // ilk bombanın alanında değil ama alanın komşusu
+    final area = g.blastArea(2, 3);
+    expect(area.length, greaterThan(12));
+    // bombanın yanındaki tek balonu patlat → bomba tetiklenir
+    final n = g.popCells([(2, 4)]);
+    expect(n, greaterThan(area.length - 1));
+    expect(g.grid[2][3], isNull); // bomba patladı
+    expect(g.grid[2][1], isNull); // iki halka uzaktaki balon da gitti
+    expect(g.grid[2][6], isNull); // zincirleme: ikinci bomba da patladı
+    expect(g.bombBlasts.length, 2);
+  });
 }

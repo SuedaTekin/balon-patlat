@@ -3,6 +3,7 @@ import 'package:balon_patlat/cloud/profile_screen.dart';
 import 'package:balon_patlat/game.dart';
 import 'package:balon_patlat/game_screen.dart';
 import 'package:balon_patlat/home.dart';
+import 'package:balon_patlat/level_intro.dart';
 import 'package:balon_patlat/progress.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -68,6 +69,42 @@ void main() {
     await t.tap(find.text('Şifremi Unuttum?'));
     await t.pump();
     expect(find.text('KOD GÖNDER'), findsOneWidget);
+  });
+
+  testWidgets('bölüm detay ve bilet ekranları taşmadan çizilir', (t) async {
+    await phone(t);
+    Progress.coins = 5000;
+    await t.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder:
+              (ctx) => Scaffold(
+                body: Center(
+                  child: TextButton(
+                    onPressed: () => showLevelIntro(ctx, 40),
+                    child: const Text('aç'),
+                  ),
+                ),
+              ),
+        ),
+      ),
+    );
+    await t.tap(find.text('aç'));
+    await t.pump();
+    await t.pump(const Duration(milliseconds: 300));
+    expect(find.text('BÖLÜM 40'), findsOneWidget);
+    expect(find.text('ÇOK ZOR BÖLÜM'), findsOneWidget);
+    await t.tap(find.text('Bomba'));
+    await t.pump();
+    expect(find.textContaining('Başlangıç maliyeti'), findsOneWidget);
+
+    await t.pumpWidget(MaterialApp(key: UniqueKey(), home: const HomeShell()));
+    await t.pump();
+    await t.tap(find.text('Etkinlik'));
+    await t.pump();
+    await t.tap(find.text('Bilet'));
+    await t.pump();
+    expect(find.text('ALTIN BİLET'), findsOneWidget);
   });
 
   testWidgets('can bitince oyna penceresi açılır', (t) async {

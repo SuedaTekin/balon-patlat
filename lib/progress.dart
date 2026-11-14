@@ -83,6 +83,16 @@ class Progress {
   /// Hesap bağlama hoş geldin paketi verildi mi?
   static bool welcomeGiven = false;
 
+  /// Bubble Pass (aylık sezon bileti).
+  static String passSeason = '';
+  static int passXp = 0;
+  static bool passGold = false;
+  static final Set<int> passFreeClaimed = {};
+  static final Set<int> passGoldClaimed = {};
+
+  /// Son bölüm galibiyetinde kazanılan bilet XP'si (zafer ekranında gösterilir).
+  static int lastPassXp = 0;
+
   /// Son kaydın zamanı (ms) — bulut eşitlemesinde hangisinin yeni olduğunu belirler.
   static int savedAt = 0;
 
@@ -124,6 +134,11 @@ class Progress {
     'weeklyScore': weeklyScore,
     'weeklyStars': weeklyStars,
     'welcomeGiven': welcomeGiven,
+    'passSeason': passSeason,
+    'passXp': passXp,
+    'passGold': passGold,
+    'passFree': passFreeClaimed.toList(),
+    'passGoldClaimed': passGoldClaimed.toList(),
   };
 
   static void fromJson(Map<String, dynamic> j) {
@@ -170,6 +185,74 @@ class Progress {
     weeklyScore = i('weeklyScore', 0);
     weeklyStars = i('weeklyStars', 0);
     welcomeGiven = j['welcomeGiven'] as bool? ?? false;
+    passSeason = s('passSeason');
+    passXp = i('passXp', 0);
+    passGold = j['passGold'] as bool? ?? false;
+    passFreeClaimed
+      ..clear()
+      ..addAll([
+        for (final x in (j['passFree'] as List? ?? [])) (x as num).toInt(),
+      ]);
+    passGoldClaimed
+      ..clear()
+      ..addAll([
+        for (final x in (j['passGoldClaimed'] as List? ?? []))
+          (x as num).toInt(),
+      ]);
+  }
+
+  // ================= Bubble Pass =================
+
+  static const passTiers = 30;
+  static const passXpPerTier = 60;
+
+  static String get currentSeasonKey {
+    final n = DateTime.now();
+    return '${n.year}-${n.month.toString().padLeft(2, '0')}';
+  }
+
+  /// Yeni ay başladıysa bileti sıfırlar.
+  static void rollPass() {
+    final k = currentSeasonKey;
+    if (passSeason == k) return;
+    passSeason = k;
+    passXp = 0;
+    passGold = false;
+    passFreeClaimed.clear();
+    passGoldClaimed.clear();
+  }
+
+  /// Ulaşılan kademe (0–30).
+  static int get passTier {
+    rollPass();
+    return min(passTiers, passXp ~/ passXpPerTier);
+  }
+
+  static void addPassXp(int xp) {
+    rollPass();
+    passXp += xp;
+    lastPassXp = xp;
+  }
+
+  static bool passClaimable(int tier, {required bool gold}) =>
+      tier <= passTier &&
+      (gold
+          ? passGold && !passGoldClaimed.contains(tier)
+          : !passFreeClaimed.contains(tier));
+
+  static int get passReadyCount {
+    var n = 0;
+    for (var t = 1; t <= passTier; t++) {
+      if (passClaimable(t, gold: false)) n++;
+      if (passClaimable(t, gold: true)) n++;
+    }
+    return n;
+  }
+
+  static void activateGoldPass() {
+    rollPass();
+    passGold = true;
+    save();
   }
 
   /// Telefondaki kaydı sıfırlar (çıkış yapınca yeni misafir için).
@@ -198,6 +281,7 @@ class Progress {
   }
 
   static void _loadLegacy(SharedPreferences p) {
+    fromJson({}); // eski kayıtta olmayan alanlar varsayılana dönsün
     coins = p.getInt('coins') ?? 500;
     unlocked = p.getInt('unlocked') ?? 1;
     stars.clear();
@@ -254,6 +338,8 @@ class Progress {
     _rollWeek();
     weeklyScore += score;
     weeklyStars += starCount;
+    // bilet XP: galibiyet 10 + yıldız başına 10
+    addPassXp(10 + starCount * 10);
     save();
     return reward;
   }

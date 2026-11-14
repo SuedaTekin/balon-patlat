@@ -51,6 +51,12 @@ const storeItems = <String, StoreItem>{
     '₺299,99',
     Reward(coins: 15000),
   ),
+  'gold_pass': StoreItem(
+    'gold_pass',
+    'Altın Bilet (bu sezon)',
+    '₺149,99',
+    Reward(),
+  ),
   'infinite_6h': StoreItem(
     'infinite_6h',
     '6 Saat Sonsuz Can',
@@ -92,6 +98,7 @@ class Billing {
     if (item == null) return;
     Progress.grant(item.reward);
     if (id == 'starter_pack') Progress.starterBought = true;
+    if (id == 'gold_pass') Progress.activateGoldPass();
     Progress.save();
   }
 

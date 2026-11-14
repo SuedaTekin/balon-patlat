@@ -121,6 +121,31 @@ void main() {
     expect(Progress.welcomeGiven, isTrue);
   });
 
+  test('Bubble Pass: XP, kademe, ödül alma, yeni sezonda sıfırlanma', () {
+    expect(Progress.passTier, 0);
+    Progress.recordWin(1, 3, 1000); // 10 + 3*10 = 40 XP
+    expect(Progress.lastPassXp, 40);
+    Progress.recordWin(2, 2, 800); // +30 → 70 XP = kademe 1
+    expect(Progress.passTier, 1);
+    expect(Progress.passClaimable(1, gold: false), isTrue);
+    expect(Progress.passClaimable(1, gold: true), isFalse); // bilet yok
+    Progress.activateGoldPass();
+    expect(Progress.passClaimable(1, gold: true), isTrue);
+    expect(Progress.passReadyCount, 2);
+    Progress.passFreeClaimed.add(1);
+    expect(Progress.passReadyCount, 1);
+    // JSON gidip gelince korunur
+    final j = Progress.toJson();
+    Progress.resetLocal();
+    Progress.fromJson(j);
+    expect(Progress.passGold, isTrue);
+    expect(Progress.passFreeClaimed, contains(1));
+    // eski sezon → sıfırlanır
+    Progress.passSeason = '2000-01';
+    expect(Progress.passTier, 0);
+    expect(Progress.passGold, isFalse);
+  });
+
   test('kayıt yeniden yüklenince korunur', () async {
     Progress.coins = 1234;
     Progress.lives = 2;

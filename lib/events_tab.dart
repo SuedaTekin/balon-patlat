@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'game.dart';
+import 'pass_tab.dart';
 import 'progress.dart';
 import 'quests.dart';
 import 'theme.dart';
@@ -167,7 +168,7 @@ class _EventsTabState extends State<EventsTab>
                 _segment(
                   0,
                   Icons.casino_rounded,
-                  'Şans Çarkı',
+                  'Çark',
                   Progress.freeSpinAvailable || Progress.streakClaimable
                       ? '!'
                       : null,
@@ -178,11 +179,25 @@ class _EventsTabState extends State<EventsTab>
                   'Görevler',
                   ready > 0 ? '$ready' : null,
                 ),
+                _segment(
+                  2,
+                  Icons.workspace_premium_rounded,
+                  'Bilet',
+                  Progress.passReadyCount > 0
+                      ? '${Progress.passReadyCount}'
+                      : null,
+                ),
               ],
             ),
           ),
         ),
-        Expanded(child: _page == 0 ? _spinPage() : _questPage()),
+        Expanded(
+          child: switch (_page) {
+            0 => _spinPage(),
+            1 => _questPage(),
+            _ => PassPage(onChanged: widget.onChanged),
+          },
+        ),
       ],
     );
   }

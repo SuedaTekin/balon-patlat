@@ -86,6 +86,7 @@ save("coin", mix(tone(lambda t: 1318, 0.08, wave_fn=sq, vol=0.3), [0] * int(0.07
 save("fire", lowpass([s * (0.4 + 0.6 * math.sin(i / SR * 30)) for i, s in enumerate(noise(0.5, 0.9, 0.8))], 0.12))
 save("laser", tone(lambda t: 1800 - t * 3000, 0.35, wave_fn=sq, vol=0.35))
 save("rainbow", mix(*[[0] * int(k * 0.05 * SR) + tone(lambda t, f=f: f, 0.25, wave_fn=tri, vol=0.35) for k, f in enumerate([523, 659, 784, 1046, 1318])]))
+save("bomb", lowpass(mix(tone(lambda t: 140 * (1 - t * 1.4), 0.6, a=0.003, vol=1.0), noise(0.55, 0.9, 1.6)), 0.09))
 save("row", tone(lambda t: 160 + 30 * math.sin(t * 60), 0.3, wave_fn=tri, vol=0.5))
 
 
@@ -100,6 +101,7 @@ save("win", mix(arp([523, 659, 784, 1046], 0.11, 0.35), [0] * int(0.48 * SR) + a
 save("lose", arp([392, 349, 311, 262], 0.18, 0.4, wave_fn=tri, vol=0.4))
 save("star", arp([1046, 1568], 0.06, 0.25, wave_fn=sq, vol=0.25))
 save("combo", arp([659, 880, 1174], 0.05, 0.18, wave_fn=sq, vol=0.25))
+save("tier", arp([784, 988, 1175, 1568], 0.07, 0.3, wave_fn=tri, vol=0.32))
 
 
 # ---------- müzik ----------

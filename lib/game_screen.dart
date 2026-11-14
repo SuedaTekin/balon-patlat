@@ -5,6 +5,7 @@ import 'package:flutter/scheduler.dart';
 
 import 'audio.dart';
 import 'game.dart';
+import 'level_intro.dart';
 import 'progress.dart';
 import 'settings.dart';
 import 'theme.dart';
@@ -22,8 +23,13 @@ const _kindBooster = {
 };
 
 class GameScreen extends StatefulWidget {
-  const GameScreen({super.key, required this.level});
+  const GameScreen({
+    super.key,
+    required this.level,
+    this.start = const StartBoosters(),
+  });
   final int level;
+  final StartBoosters start;
 
   @override
   State<GameScreen> createState() => _GameScreenState();
@@ -38,6 +44,9 @@ class _GameScreenState extends State<GameScreen>
   bool _newBest = false, _lifeTaken = false;
   int _reward = 0;
   bool _lostSfx = false, _adContinueUsed = false, _adDoubled = false;
+  bool _startApplied = false;
+  final List<ShotKind> _startQueue = [];
+  ShotKind? _prepaid;
   static int _open = 0;
 
   @override
@@ -75,6 +84,13 @@ class _GameScreenState extends State<GameScreen>
 
   static (String, String, Color)? _introFor(int level) {
     final cfg = LevelConfig.forLevel(level);
+    if (level == 12) {
+      return (
+        'YENİ: BOMBA BALON',
+        'Yanındaki bir balonu patlat, bomba çevresini havaya uçursun!',
+        const Color(0xFFFF4D4D),
+      );
+    }
     if (level == 21) {
       return (
         'YENİ: TAŞ BALON',
@@ -176,10 +192,30 @@ class _GameScreenState extends State<GameScreen>
       Navigator.pop(context);
       return;
     }
-    if (!await ensureLife(context) || !mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => GameScreen(level: widget.level + 1)),
-    );
+    await startLevel(context, widget.level + 1, replace: true);
+  }
+
+  /// Başlangıç güçlendiricilerini ilk karede uygular (ızgara o an kurulur).
+  void _applyStart() {
+    if (_startApplied || game.totalMoves == 0) return;
+    _startApplied = true;
+    final s = widget.start;
+    if (s.extraMoves) {
+      game.totalMoves += 3;
+      game.addMoves(3);
+    }
+    if (s.bomb) _startQueue.add(ShotKind.bomb);
+    if (s.rainbow) _startQueue.add(ShotKind.rainbow);
+    _armNextStart();
+  }
+
+  void _armNextStart() {
+    if (_startQueue.isEmpty) {
+      _prepaid = null;
+      return;
+    }
+    _prepaid = _startQueue.removeAt(0);
+    game.armed = _prepaid!;
   }
 
   void _onBack() {
@@ -197,6 +233,7 @@ class _GameScreenState extends State<GameScreen>
     final dt = (elapsed - _last).inMicroseconds / 1e6;
     _last = elapsed;
     if (!_paused) game.update(dt);
+    _applyStart();
     if (game.state == GameState.won && !_handledWin) {
       _handledWin = true;
       final prev = Progress.bestScores[widget.level];
@@ -232,6 +269,9 @@ class _GameScreenState extends State<GameScreen>
     _lifeTaken = false;
     _adContinueUsed = false;
     _adDoubled = false;
+    // başlangıç güçlendiricileri tek seferliktir; yeniden başlamada gelmez
+    _startQueue.clear();
+    _prepaid = null;
   }
 
   // ---------------- kullanıcı girişi ----------------
@@ -251,12 +291,27 @@ class _GameScreenState extends State<GameScreen>
     _pointerAiming = false;
     game.aiming = false;
     final kind = game.fire();
+    if (kind == null) return;
+    if (_prepaid != null && kind == _prepaid) {
+      // başlangıçta ödendi; sıradakini kur
+      _armNextStart();
+      return;
+    }
     final b = _kindBooster[kind];
     if (b != null) Progress.useBooster(b);
   }
 
   Future<void> _onBooster(Booster b) async {
     if (game.state != GameState.playing || game.ballPos != null) return;
+    if (_prepaid != null && game.armed == _prepaid) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text('Önce başlangıç güçlendiricini at!'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
     if (Progress.boosters[b]! <= 0) {
       await _buyDialog(b);
       return;
@@ -889,6 +944,24 @@ class _GameScreenState extends State<GameScreen>
               Text('Altın', style: jakarta(14, color: LP.muted)),
             ],
           ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.workspace_premium_rounded,
+                color: LP.gold,
+                size: 18,
+              ),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  '+${Progress.lastPassXp} Bilet XP · Kademe ${Progress.passTier}',
+                  style: outfit(13, color: LP.gold),
+                ),
+              ),
+            ],
+          ),
           if (!_adDoubled && _reward > 0) ...[
             const SizedBox(height: 10),
             AdButton(
@@ -1515,6 +1588,60 @@ class GamePainter extends CustomPainter {
     );
   }
 
+  /// Bomba balon: parlak siyah gövde, fitil ve kıvılcım, kırmızı halka.
+  static void drawBomb(Canvas canvas, Offset c, double radius, [double t = 0]) {
+    canvas.drawCircle(
+      c,
+      radius * 1.08,
+      Paint()
+        ..color = const Color(
+          0xFFFF3D3D,
+        ).withValues(alpha: 0.35 + 0.25 * sin(t * 8))
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, radius * 0.35),
+    );
+    drawBubble(canvas, c, radius, const Color(0xFF2E2A3E), glow: false);
+    canvas.drawCircle(
+      c,
+      radius * 0.97,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = radius * 0.1
+        ..color = const Color(0xFFFF4D4D),
+    );
+    // fitil
+    final top = c + Offset(radius * 0.35, -radius * 0.8);
+    canvas.drawPath(
+      Path()
+        ..moveTo(top.dx, top.dy)
+        ..quadraticBezierTo(
+          top.dx + radius * 0.35,
+          top.dy - radius * 0.35,
+          top.dx + radius * 0.15,
+          top.dy - radius * 0.55,
+        ),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = radius * 0.12
+        ..strokeCap = StrokeCap.round
+        ..color = const Color(0xFFD9B98A),
+    );
+    final spark = top + Offset(radius * 0.15, -radius * 0.55);
+    final flick = 0.8 + 0.2 * sin(t * 23);
+    canvas.drawCircle(
+      spark,
+      radius * 0.28 * flick,
+      Paint()..color = const Color(0xFFFFB800).withValues(alpha: 0.7),
+    );
+    canvas.drawCircle(spark, radius * 0.12, Paint()..color = Colors.white);
+    _icon(
+      canvas,
+      Icons.flash_on_rounded,
+      c,
+      radius * 1.0,
+      const Color(0xFFFF6B6B),
+    );
+  }
+
   static void drawShot(
     Canvas canvas,
     Offset c,
@@ -1560,6 +1687,8 @@ class GamePainter extends CustomPainter {
           radius * 1.1,
           const Color(0xFF00363D),
         );
+      case ShotKind.bomb:
+        drawBomb(canvas, c, radius);
     }
   }
 
@@ -1687,6 +1816,8 @@ class GamePainter extends CustomPainter {
         final p = _bubblePos(row, c);
         if (v == stone) {
           drawStone(canvas, p, r * 0.93);
+        } else if (v == bombCell) {
+          drawBomb(canvas, p, r * 0.93, g.time + row + c);
         } else {
           drawBubble(canvas, p, r * 0.93, bubbleColors[v]);
         }
@@ -1697,6 +1828,8 @@ class GamePainter extends CustomPainter {
     for (final p in g.particles) {
       if (p.falling && p.color == stone) {
         drawStone(canvas, p.pos, r * 0.93);
+      } else if (p.falling && p.color == bombCell) {
+        drawBomb(canvas, p.pos, r * 0.93);
       } else if (p.falling) {
         drawBubble(
           canvas,
@@ -1709,7 +1842,11 @@ class GamePainter extends CustomPainter {
       } else {
         final k = (p.t / 0.35).clamp(0.0, 1.0);
         final col =
-            p.color == stone ? const Color(0xFF9AA3B5) : bubbleColors[p.color];
+            p.color == stone
+                ? const Color(0xFF9AA3B5)
+                : p.color == bombCell
+                ? const Color(0xFFFF4D4D)
+                : bubbleColors[p.color];
         canvas.drawCircle(
           p.pos,
           r * (0.9 + k),
@@ -1728,6 +1865,25 @@ class GamePainter extends CustomPainter {
           );
         }
       }
+    }
+
+    // bomba şok dalgaları
+    for (final (c, t) in g.bombBlasts) {
+      final k = (t / 0.45).clamp(0.0, 1.0);
+      canvas.drawCircle(
+        c,
+        r * (1 + k * 4.2),
+        Paint()
+          ..color = const Color(0xFFFFB800).withValues(alpha: 0.35 * (1 - k)),
+      );
+      canvas.drawCircle(
+        c,
+        r * (1 + k * 4.6),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = r * 0.35 * (1 - k)
+          ..color = Colors.white.withValues(alpha: 0.9 * (1 - k)),
+      );
     }
 
     // uçuşan puan yazıları
@@ -1765,6 +1921,7 @@ class GamePainter extends CustomPainter {
         ShotKind.fire => const Color(0xFFFF7A1A),
         ShotKind.rainbow => Colors.white,
         ShotKind.laser => LP.cyan,
+        ShotKind.bomb => const Color(0xFFFF4D4D),
         ShotKind.normal => bubbleColors[g.current],
       };
       var pos = g.shooter;
@@ -1782,11 +1939,28 @@ class GamePainter extends CustomPainter {
         }
         if (pos.dy < r || (g.armed != ShotKind.fire && _near(pos))) {
           // hedef: balonun oturacağı yerde hayalet balon
-          if (g.armed == ShotKind.normal || g.armed == ShotKind.rainbow) {
+          if (g.armed == ShotKind.normal ||
+              g.armed == ShotKind.rainbow ||
+              g.armed == ShotKind.bomb) {
             final cell = g.landingCell(Offset(pos.dx, max(pos.dy, r)));
             if (cell != null) {
               final at = g.cellCenter(cell.$1, cell.$2);
               final pulse = 0.5 + 0.5 * sin(g.time * 6);
+              if (g.armed == ShotKind.bomb) {
+                // patlama alanı önizlemesi
+                for (final (a, b) in g.blastArea(cell.$1, cell.$2)) {
+                  if (g.grid[a][b] != null) {
+                    canvas.drawCircle(
+                      g.cellCenter(a, b),
+                      r * 0.95,
+                      Paint()
+                        ..color = const Color(
+                          0xFFFF4D4D,
+                        ).withValues(alpha: 0.18 + 0.12 * pulse),
+                    );
+                  }
+                }
+              }
               canvas.drawCircle(
                 at,
                 r * 0.9,

@@ -10,7 +10,7 @@ import 'cloud/profile_screen.dart';
 import 'cloud/team_tab.dart';
 import 'cloud/ui_common.dart';
 import 'events_tab.dart';
-import 'game_screen.dart';
+import 'level_intro.dart';
 import 'map_screen.dart';
 import 'progress.dart';
 import 'quests.dart';
@@ -91,14 +91,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   void _refresh() => setState(() {});
 
   Future<void> _openLevel(int level) async {
-    if (!await ensureLife(context)) {
-      _refresh();
-      return;
-    }
-    if (!mounted) return;
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => GameScreen(level: level)));
+    await startLevel(context, level);
     _refresh();
   }
 

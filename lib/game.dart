@@ -13,7 +13,7 @@ const List<Color> bubbleColors = [
 
 enum Booster { moves, rainbow, fire, laser }
 
-enum ShotKind { normal, rainbow, fire, laser }
+enum ShotKind { normal, rainbow, fire, laser, bomb }
 
 enum GameState { playing, won, lostMoves, lostDanger }
 
@@ -41,7 +41,12 @@ typedef Cell = (int, int);
 /// Ateş/Lazer ile kırılır. Kazanmak için taşları temizlemek gerekmez.
 const int stone = 99;
 
-bool isColor(int? v) => v != null && v != stone;
+bool isColor(int? v) => v != null && v < bubbleColors.length;
+
+/// Bomba balon: yanındaki bir balon patlayınca (ya da Ateş/Lazer değince)
+/// çevresindeki iki halkayı havaya uçurur; zincirleme patlayabilir.
+/// Taş gibi, kazanmak için temizlenmesi gerekmez.
+const int bombCell = 98;
 
 /// Toplam bölüm sayısı.
 const int maxLevel = 500;
@@ -102,6 +107,9 @@ class LevelConfig {
     if (kind != LevelKind.normal) r += 0.03;
     return r;
   }
+
+  /// Izgaradaki bomba balon sayısı (12. bölümden itibaren 1–3).
+  int get bombCount => level < 12 ? 0 : min(3, 1 + (level - 12) ~/ 60);
 
   /// Tehlike çizgisinin üstünde boş bırakılan sıra sayısı.
   int get freeRows => level < 10 ? 5 : 4;
@@ -242,6 +250,16 @@ class BubbleGame {
         }
       }
     }
+    // Bombalar: orta-alt sıralarda renkli bir balonun yerine konur.
+    for (var k = 0, tries = 0; k < cfg.bombCount && tries < 50; tries++) {
+      final row = max(1, rows ~/ 3) + g.nextInt(max(1, rows - rows ~/ 3));
+      final c = g.nextInt(rowLen(min(row, rows - 1)));
+      final rr = min(row, rows - 1);
+      if (isColor(grid[rr][c]) && bubbleCount > 8) {
+        grid[rr][c] = bombCell;
+        k++;
+      }
+    }
     initialCount = bubbleCount;
     // taşlar engel olduğu için az da olsa ek hamle verir
     totalMoves = movesFor(initialCount, cfg) + (stoneCount * 0.12).ceil();
@@ -259,6 +277,7 @@ class BubbleGame {
     armed = ShotKind.normal;
     particles.clear();
     floats.clear();
+    bombBlasts.clear();
     ballPos = null;
     comboText = null;
     time = 0;
@@ -395,8 +414,11 @@ class BubbleGame {
     ballPos = shooter;
     ballVel = Offset(cos(aimAngle), sin(aimAngle)) * speed;
     ballColor = current;
-    current = next;
-    next = pickColor();
+    // bomba renkli balonu harcamaz; sıradaki renk yerinde kalır
+    if (ballKind != ShotKind.bomb) {
+      current = next;
+      next = pickColor();
+    }
     movesLeft--;
     onSfx?.call(switch (ballKind) {
       ShotKind.fire => 'fire',
@@ -435,6 +457,10 @@ class BubbleGame {
       f.t += dt;
     }
     floats.removeWhere((f) => f.t > 0.9);
+    for (var i = 0; i < bombBlasts.length; i++) {
+      bombBlasts[i] = (bombBlasts[i].$1, bombBlasts[i].$2 + dt);
+    }
+    bombBlasts.removeWhere((b) => b.$2 > 0.45);
     for (final p in particles) {
       p.t += dt;
       if (p.falling) {
@@ -557,6 +583,14 @@ class BubbleGame {
       return;
     }
 
+    if (ballKind == ShotKind.bomb) {
+      // bomba atış: oturduğu yerde iki halkalık alanı patlatır
+      onSfx?.call('bomb');
+      bombBlasts.add((impactPos!, 0.0));
+      _finishShot(_pop(blastArea(row, c)));
+      return;
+    }
+
     if (ballKind == ShotKind.rainbow) {
       var bestColor = ballColor;
       var bestSize = 0;
@@ -580,21 +614,52 @@ class BubbleGame {
     _finishShot(cluster.length >= 3 ? _pop(cluster) : 0);
   }
 
+  /// Bir hücre ve çevresindeki iki halka (patlama alanı).
+  Set<Cell> blastArea(int row, int c) {
+    final out = <Cell>{(row, c)};
+    for (final n in neighbors(row, c)) {
+      out.add(n);
+      out.addAll(neighbors(n.$1, n.$2));
+    }
+    return out;
+  }
+
+  /// Testler için: verilen hücreleri patlatır (bomba zinciri dahil).
+  int popCells(Iterable<Cell> cells) => _pop(cells);
+
+  /// Patlayan bombaların merkezleri ve yaşları (şok dalgası çizimi için).
+  final List<(Offset, double)> bombBlasts = [];
+
+  /// Hücreleri patlatır. Patlayan bir balonun yanındaki bomba balon da
+  /// patlar ve iki halkalık alanı temizler (zincirleme olabilir).
   int _pop(Iterable<Cell> cells) {
     var n = 0;
-    var stones = false;
-    for (final (a, b) in cells) {
+    var stones = false, bombs = false;
+    final queue = cells.toList();
+    for (var i = 0; i < queue.length; i++) {
+      final (a, b) = queue[i];
       final v = grid[a][b];
       if (v == null) continue;
       particles.add(Particle(cellCenter(a, b), Offset.zero, v, false));
       grid[a][b] = null;
-      if (v != stone) {
+      if (isColor(v)) {
         _shotColors[v] = (_shotColors[v] ?? 0) + 1;
-      } else {
+      } else if (v == stone) {
         stones = true;
+      }
+      if (v == bombCell) {
+        bombs = true;
+        bombBlasts.add((cellCenter(a, b), 0));
+        queue.addAll(blastArea(a, b));
+      } else {
+        // komşudaki bombayı tetikle
+        for (final nb in neighbors(a, b)) {
+          if (grid[nb.$1][nb.$2] == bombCell) queue.add(nb);
+        }
       }
       n++;
     }
+    if (bombs) onSfx?.call('bomb');
     if (stones) onSfx?.call('stone');
     return n;
   }
@@ -669,10 +734,11 @@ class BubbleGame {
 
   void _checkEnd() {
     if (bubbleCount == 0) {
-      // kalan taşlar ufalanıp düşer
+      // kalan taşlar ve bombalar ufalanıp düşer
       for (var a = 0; a < grid.length; a++) {
         for (var b = 0; b < rowLen(a); b++) {
-          if (grid[a][b] == stone) {
+          final v = grid[a][b];
+          if (v != null) {
             particles.add(
               Particle(
                 cellCenter(a, b),
@@ -680,12 +746,12 @@ class BubbleGame {
                   (rnd.nextDouble() - 0.5) * r * 6,
                   -r * rnd.nextDouble() * 4,
                 ),
-                stone,
+                v,
                 true,
               ),
             );
             grid[a][b] = null;
-            score += 30;
+            score += v == bombCell ? 100 : 30;
           }
         }
       }
