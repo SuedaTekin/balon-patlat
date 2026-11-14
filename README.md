@@ -1,16 +1,31 @@
-# balon_patlat
+# Balon Patlat 🎈
 
-A new Flutter project.
+Flutter ile yazılmış Android bubble shooter oyunu.
 
-## Getting Started
+- **300 bölüm / 30 bölge**, bölüm ilerledikçe artan zorluk, taş balonlar, ZOR ve ÇOK ZOR bölümler
+- 4 güçlendirici (Gökkuşağı, Ateş Topu, Lazer, +5 Hamle), kombo ve yıldız sistemi
+- Can sistemi, günlük şans çarkı, 7 günlük giriş serisi, günlük görevler
+- Supabase: misafir + e-posta hesabı, bulut kayıt, haftalık lig, genel ve arkadaş sıralaması, takımlar (sohbet, can isteme, haftalık sandık)
+- Google Play Billing (ürün tanımlı değilse test modu), AdMob ödüllü reklamlar
+- Sentezlenmiş ses efektleri ve müzik (`tool/gen_audio.py`)
 
-This project is a starting point for a Flutter application.
+## Geliştirme
 
-A few resources to get you started if this is your first Flutter project:
+```
+flutter pub get
+flutter analyze
+flutter test test/widget_test.dart test/screen_test.dart test/economy_test.dart test/levels_test.dart
+flutter build apk --release
+```
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+Zorluk dengesi (yavaş, bot oynar):
+```
+flutter test test/balance_test.dart --dart-define=LEVELS=20,25,30,50,100
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Belgeler
+- Sunucu kurulumu: [supabase/KURULUM.md](supabase/KURULUM.md), şema: [supabase/schema.sql](supabase/schema.sql)
+- Play Store yayın rehberi: [docs/PLAY_STORE.md](docs/PLAY_STORE.md)
+- Gizlilik politikası: [docs/privacy/index.html](docs/privacy/index.html)
+
+İmza anahtarı (`android/key.properties`, `*.jks`) depoya dahil değildir.
