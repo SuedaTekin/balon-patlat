@@ -185,7 +185,7 @@ class _ShopTabState extends State<ShopTab> {
                         ),
                       ),
                       const SizedBox(width: 12),
-                      Text(
+                      MoneyText(
                         '₺149,99',
                         style: outfit(
                           14,
@@ -193,7 +193,7 @@ class _ShopTabState extends State<ShopTab> {
                         ).copyWith(decoration: TextDecoration.lineThrough),
                       ),
                       const SizedBox(width: 6),
-                      Text(
+                      MoneyText(
                         Billing.price('starter_pack'),
                         style: outfit(
                           22,
@@ -432,7 +432,7 @@ class _ShopTabState extends State<ShopTab> {
                   onTap: () => _buyReal(p.id),
 
                   child: FittedBox(
-                    child: Text(
+                    child: MoneyText(
                       p.price,
                       style: outfit(
                         16,
@@ -494,7 +494,7 @@ class _ShopTabState extends State<ShopTab> {
             padding: EdgeInsets.zero,
             onTap: () => _buyReal('infinite_6h'),
             child: FittedBox(
-              child: Text(
+              child: MoneyText(
                 Billing.price('infinite_6h'),
                 style: outfit(16, w: FontWeight.w900, color: Colors.white),
               ),

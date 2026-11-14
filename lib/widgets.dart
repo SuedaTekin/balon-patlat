@@ -548,7 +548,7 @@ Future<bool> confirmPurchase(
           children: [
             Text(item, textAlign: TextAlign.center, style: outfit(20)),
             const SizedBox(height: 6),
-            Text(
+            MoneyText(
               price,
               textAlign: TextAlign.center,
               style: outfit(30, w: FontWeight.w900, color: LP.gold),

@@ -49,6 +49,45 @@ TextStyle jakarta(
   Color color = LP.onSurface,
 }) => GoogleFonts.plusJakartaSans(fontSize: size, fontWeight: w, color: color);
 
+/// Fiyat metni: Outfit yazı tipinde ₺ işareti olmadığı için para birimi
+/// sembollerini sistem yazı tipiyle (Roboto) çizer.
+class MoneyText extends StatelessWidget {
+  const MoneyText(this.text, {super.key, required this.style, this.textAlign});
+  final String text;
+  final TextStyle style;
+  final TextAlign? textAlign;
+
+  static final _symbol = RegExp(r'[₺€\$£¥₹]');
+
+  @override
+  Widget build(BuildContext context) {
+    final spans = <TextSpan>[];
+    var last = 0;
+    for (final m in _symbol.allMatches(text)) {
+      if (m.start > last) {
+        spans.add(TextSpan(text: text.substring(last, m.start)));
+      }
+      spans.add(
+        TextSpan(
+          text: m.group(0),
+          style: style.copyWith(
+            fontFamily: 'Roboto',
+            fontFamilyFallback: const ['sans-serif'],
+          ),
+        ),
+      );
+      last = m.end;
+    }
+    if (last < text.length) {
+      spans.add(TextSpan(text: text.substring(last)));
+    }
+    return Text.rich(
+      TextSpan(style: style, children: spans),
+      textAlign: textAlign,
+    );
+  }
+}
+
 const embossShadow = [Shadow(color: Color(0xFF1A0730), offset: Offset(0, 3))];
 
 const bgGradient = BoxDecoration(
