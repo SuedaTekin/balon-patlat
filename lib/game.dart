@@ -35,7 +35,7 @@ const int stone = 99;
 bool isColor(int? v) => v != null && v != stone;
 
 /// Toplam bölüm sayısı.
-const int maxLevel = 300;
+const int maxLevel = 500;
 
 /// Bölüm türü: zor bölümler haritada kırmızı/mor işaretlenir ve
 /// daha çok altın verir.
@@ -65,13 +65,16 @@ class LevelConfig {
 
   LevelKind get kind => kindOf(level);
 
-  /// Hamle çarpanı: 1. seviyede cömert (1.10), 32'de 0.72, sonra yavaşça
-  /// 0.60'a iner. Bölge başları biraz rahat, zor bölümler daha sıkı.
+  /// Hamle çarpanı: 1. seviyede cömert (1.10), 32'de 0.72, 132'de 0.60,
+  /// 300'den sonra 500'e kadar 0.55'e iner. Bölge başları biraz rahat,
+  /// zor bölümler daha sıkı.
   double get movesScale {
     var s =
         level <= 32
             ? 1.10 - (level - 1) * 0.012
-            : max(0.60, 0.72 - (level - 32) * 0.0012);
+            : level <= 300
+            ? max(0.60, 0.72 - (level - 32) * 0.0012)
+            : max(0.55, 0.60 - (level - 300) * 0.00025);
     if (level > 10 && level % 10 == 1) s *= 1.08;
     s *= switch (kind) {
       LevelKind.hard => 0.96,
@@ -81,10 +84,12 @@ class LevelConfig {
     return s;
   }
 
-  /// Taş balon oranı (21. bölümden itibaren %3'ten %10'a, zor bölümde +%3).
+  /// Taş balon oranı: 21. bölümden itibaren %3'ten %10'a, 300'den sonra
+  /// %13'e kadar; zor bölümde +%3.
   double get stoneRatio {
     if (level < 21) return 0;
     var r = min(0.10, 0.03 + (level - 21) * 0.0005);
+    if (level > 300) r += min(0.03, (level - 300) * 0.00015);
     if (kind != LevelKind.normal) r += 0.03;
     return r;
   }
@@ -93,7 +98,7 @@ class LevelConfig {
   int get freeRows => level < 10 ? 5 : 4;
 
   /// Top hızı (ekran genişliği/saniye), seviyeyle hafifçe artar.
-  double get speedFactor => 3.4 + min(level, 80) * 0.012;
+  double get speedFactor => 3.4 + min(level, 150) * 0.010;
 
   /// Kazanınca ilk sefer verilen ek altın.
   int get bonusCoins => switch (kind) {

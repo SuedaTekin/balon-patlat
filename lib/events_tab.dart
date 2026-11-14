@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -116,9 +117,9 @@ class _EventsTabState extends State<EventsTab>
 
   Future<void> _spin() async {
     if (_spinning) return;
-    final free = Progress.freeSpinAvailable;
-    if (!free && !Progress.spend(Progress.extraSpinPrice)) return;
-    if (free) Progress.useFreeSpin();
+    // Çark günde yalnızca 1 kez çevrilir.
+    if (!Progress.freeSpinAvailable) return;
+    Progress.useFreeSpin();
     HapticFeedback.mediumImpact();
     final i = pickSlice(_rnd);
     final seg = 2 * pi / spinSlices.length;
@@ -237,7 +238,6 @@ class _EventsTabState extends State<EventsTab>
 
   Widget _spinPage() {
     final free = Progress.freeSpinAvailable;
-    final canPay = Progress.coins >= Progress.extraSpinPrice;
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
       children: [
@@ -275,7 +275,7 @@ class _EventsTabState extends State<EventsTab>
             child: Text(
               free
                   ? '● Günün İlk Çevirmesi ÜCRETSİZ!'
-                  : 'Ücretsiz hak yarın yenilenir',
+                  : 'Bugünkü hakkını kullandın, yarın tekrar gel!',
               style: outfit(14, color: free ? LP.gold : LP.muted),
             ),
           ),
@@ -300,7 +300,7 @@ class _EventsTabState extends State<EventsTab>
                           ),
                     ),
                     GestureDetector(
-                      onTap: (free || canPay) ? _spin : null,
+                      onTap: free ? _spin : null,
                       child: Container(
                         width: size * 0.26,
                         height: size * 0.26,
@@ -356,7 +356,7 @@ class _EventsTabState extends State<EventsTab>
         const SizedBox(height: 16),
         JuicyButton.gold(
           height: 72,
-          onTap: _spinning || !(free || canPay) ? null : _spin,
+          onTap: _spinning || !free ? null : _spin,
           child: FittedBox(
             fit: BoxFit.scaleDown,
             child: Row(
@@ -368,25 +368,17 @@ class _EventsTabState extends State<EventsTab>
                   size: 30,
                 ),
                 const SizedBox(width: 10),
-                Text(
-                  free ? 'ÜCRETSİZ ÇEVİR' : 'ÇEVİR  ',
-                  style: outfit(
-                    24,
-                    w: FontWeight.w900,
-                    color: const Color(0xFF3D2400),
-                  ),
-                ),
-                if (!free) ...[
-                  const CoinIcon(size: 26),
+                if (free)
                   Text(
-                    ' ${Progress.extraSpinPrice}',
+                    'ÜCRETSİZ ÇEVİR',
                     style: outfit(
                       24,
                       w: FontWeight.w900,
                       color: const Color(0xFF3D2400),
                     ),
-                  ),
-                ],
+                  )
+                else
+                  const SpinCountdown(),
               ],
             ),
           ),
@@ -985,4 +977,40 @@ class _PointerPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+/// Çark kullanıldıysa gece yarısına kalan süre.
+class SpinCountdown extends StatefulWidget {
+  const SpinCountdown({super.key});
+
+  @override
+  State<SpinCountdown> createState() => _SpinCountdownState();
+}
+
+class _SpinCountdownState extends State<SpinCountdown> {
+  late final Timer _t;
+
+  @override
+  void initState() {
+    super.initState();
+    _t = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _t.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final left = DateTime(now.year, now.month, now.day + 1).difference(now);
+    return Text(
+      'YENİ HAK: ${fmtDuration(left)}',
+      style: outfit(22, w: FontWeight.w900, color: const Color(0xFF3D2400)),
+    );
+  }
 }

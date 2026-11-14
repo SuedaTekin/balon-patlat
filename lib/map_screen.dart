@@ -65,6 +65,25 @@ const regionNames = [
   'Zümrüt Şelalesi',
   'Gölge Kalesi',
   'Galaksi Kapısı',
+  'Kum Saati Çölü',
+  'Gümüş Nehir',
+  'Mantar Köyü',
+  'Yakut Dağları',
+  'Sis Adaları',
+  'Kar Tanesi Ovası',
+  'Şimşek Tepesi',
+  'Kristal Okyanus',
+  'Yıldız Gözlemevi',
+  'Kayıp Şehir',
+  'Elmas Madeni',
+  'Uçan Adalar',
+  'Gece Yarısı Ormanı',
+  'Ateş Böceği Vadisi',
+  'Kutup Yıldızı',
+  'Gökyüzü Kalesi',
+  'Zaman Tüneli',
+  'Efsane Arenası',
+  'Sonsuzluk Kapısı',
   'Balon Tahtı',
 ];
 const levelsPerRegion = 10;
@@ -86,11 +105,16 @@ class _MapTabState extends State<MapTab> {
     initialScrollOffset: max(0, (Progress.unlocked - 1) * spacing - 220),
   );
 
-  /// Gösterilen düğüm sayısı: bulunulan bölgenin bir sonrakinin sonuna kadar.
-  int get shown => min(
-    maxLevel,
-    max(30, ((Progress.unlocked - 1) ~/ levelsPerRegion + 2) * levelsPerRegion),
-  );
+  /// Haritada tüm bölümler gösterilir; çizim sadece ekrandakilerle yapılır.
+  int get shown => maxLevel;
+
+  /// Kaydırma konumuna göre ekranda (ve biraz ötesinde) kalan bölüm aralığı.
+  (int, int) _window(double viewH) {
+    final off = _ctrl.hasClients ? _ctrl.offset : _ctrl.initialScrollOffset;
+    final lo = ((off - 400 - bottomPad) / spacing).floor() + 1;
+    final hi = ((off + viewH + 400 - bottomPad) / spacing).ceil() + 1;
+    return (max(1, lo), min(shown, hi));
+  }
 
   Future<void> _open(int level) async {
     await widget.onOpen(level);
@@ -121,34 +145,25 @@ class _MapTabState extends State<MapTab> {
                 child: SizedBox(
                   width: w,
                   height: h,
-                  child: Stack(
-                    children: [
-                      CustomPaint(
-                        size: Size(w, h),
-                        painter: _PathPainter(pts, current - 1),
-                      ),
-                      for (
-                        var i = levelsPerRegion + 1;
-                        i <= shown;
-                        i += levelsPerRegion
-                      )
-                        _regionGate(i, pts[i - 2], pts[i - 1]),
-                      for (var i = 1; i <= shown; i++)
-                        ..._node(i, pts[i - 1], current),
-                      if (shown < maxLevel)
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          top: 18,
-                          child: Center(
-                            child: Text(
-                              'Daha fazlası için ilerle ▲',
-                              style: outfit(13, color: LP.muted),
-                            ),
+                  child: AnimatedBuilder(
+                    animation: _ctrl,
+                    builder: (context, _) {
+                      final (lo, hi) = _window(c.maxHeight);
+                      return Stack(
+                        children: [
+                          CustomPaint(
+                            size: Size(w, h),
+                            painter: _PathPainter(pts, current - 1, lo, hi),
                           ),
-                        ),
-                      ..._friendChips(pts, w),
-                    ],
+                          for (var i = max(2, lo); i <= hi; i++)
+                            if (i % levelsPerRegion == 1)
+                              _regionGate(i, pts[i - 2], pts[i - 1]),
+                          for (var i = lo; i <= hi; i++)
+                            ..._node(i, pts[i - 1], current),
+                          ..._friendChips(pts, w),
+                        ],
+                      );
+                    },
                   ),
                 ),
               );
@@ -464,13 +479,17 @@ class _MapTabState extends State<MapTab> {
 }
 
 class _PathPainter extends CustomPainter {
-  _PathPainter(this.pts, this.doneIndex);
+  _PathPainter(this.pts, this.doneIndex, this.lo, this.hi);
   final List<Offset> pts;
   final int doneIndex;
 
+  /// Çizilecek bölüm aralığı (1 tabanlı, ekrandakiler).
+  final int lo, hi;
+
   Path _path(int upTo) {
-    final path = Path()..moveTo(pts[0].dx, pts[0].dy);
-    for (var i = 1; i <= upTo && i < pts.length; i++) {
+    final start = max(0, lo - 2);
+    final path = Path()..moveTo(pts[start].dx, pts[start].dy);
+    for (var i = start + 1; i <= upTo && i < min(pts.length, hi + 1); i++) {
       final a = pts[i - 1], b = pts[i];
       final my = (a.dy + b.dy) / 2;
       path.cubicTo(a.dx, my, b.dx, my, b.dx, b.dy);
@@ -511,7 +530,10 @@ class _PathPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_PathPainter old) =>
-      old.doneIndex != doneIndex || old.pts.length != pts.length;
+      old.doneIndex != doneIndex ||
+      old.pts.length != pts.length ||
+      old.lo != lo ||
+      old.hi != hi;
 }
 
 class LogoPainter extends CustomPainter {
