@@ -121,6 +121,27 @@ class _MapTabState extends State<MapTab> {
     if (mounted) setState(() {});
   }
 
+  /// En son gösterilen açık bölüm; değişince (bölüm kazanıldı ya da bulut
+  /// kaydı yüklendi) harita yeni bölüme kayar.
+  late int _shownUnlocked = Progress.unlocked;
+
+  void _followProgress() {
+    if (Progress.unlocked == _shownUnlocked) return;
+    _shownUnlocked = Progress.unlocked;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_ctrl.hasClients) return;
+      final target = min(
+        _ctrl.position.maxScrollExtent,
+        max(0.0, (Progress.unlocked - 1) * spacing - 220),
+      );
+      _ctrl.animateTo(
+        target,
+        duration: const Duration(milliseconds: 700),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
   Offset _pos(int level, double w, double h) => Offset(
     w / 2 + sin(level * 0.85) * w * 0.27,
     h - bottomPad - (level - 1) * spacing,
@@ -128,6 +149,7 @@ class _MapTabState extends State<MapTab> {
 
   @override
   Widget build(BuildContext context) {
+    _followProgress();
     final current = Progress.unlocked;
     final region = (current - 1) ~/ levelsPerRegion;
     return Column(

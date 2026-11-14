@@ -1417,10 +1417,85 @@ class GamePainter extends CustomPainter {
       Paint()
         ..shader = const RadialGradient(
           center: Alignment(-0.35, -0.4),
-          colors: [Color(0xFFB9C0CE), Color(0xFF6E7689), Color(0xFF3E4456)],
+          colors: [Color(0xFFB8B2A7), Color(0xFF7A746B), Color(0xFF45403A)],
           stops: [0, 0.6, 1],
         ).createShader(rect),
     );
+    // kayaç yüzeyleri: köşeli parçalar, sol üst açık, sağ alt koyu
+    canvas.save();
+    canvas.clipPath(Path()..addOval(rect));
+    Offset at(double x, double y) => c + Offset(x * radius, y * radius);
+    void facet(List<Offset> pts, Color color) {
+      final p = Path()..moveTo(pts.first.dx, pts.first.dy);
+      for (final o in pts.skip(1)) {
+        p.lineTo(o.dx, o.dy);
+      }
+      canvas.drawPath(p..close(), Paint()..color = color);
+    }
+
+    facet([
+      at(-1, -1),
+      at(0.15, -1),
+      at(-0.05, -0.2),
+      at(-1, 0.05),
+    ], const Color(0x30FFFFFF));
+    facet([
+      at(0.15, -1),
+      at(1, -0.55),
+      at(0.55, 0.05),
+      at(-0.05, -0.2),
+    ], const Color(0x14FFFFFF));
+    facet([
+      at(-1, 0.05),
+      at(-0.05, -0.2),
+      at(0.1, 0.55),
+      at(-0.6, 1),
+    ], const Color(0x18000000));
+    facet([
+      at(-0.05, -0.2),
+      at(0.55, 0.05),
+      at(1, 0.6),
+      at(0.1, 0.55),
+    ], const Color(0x2A000000));
+    facet([
+      at(0.1, 0.55),
+      at(1, 0.6),
+      at(0.6, 1),
+      at(-0.6, 1),
+    ], const Color(0x40000000));
+    // facet kenarları
+    final edge =
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = radius * 0.05
+          ..color = const Color(0x55262A36);
+    canvas.drawPath(
+      Path()
+        ..moveTo(at(0.15, -1).dx, at(0.15, -1).dy)
+        ..lineTo(at(-0.05, -0.2).dx, at(-0.05, -0.2).dy)
+        ..lineTo(at(0.1, 0.55).dx, at(0.1, 0.55).dy)
+        ..moveTo(at(-1, 0.05).dx, at(-1, 0.05).dy)
+        ..lineTo(at(-0.05, -0.2).dx, at(-0.05, -0.2).dy)
+        ..lineTo(at(0.55, 0.05).dx, at(0.55, 0.05).dy)
+        ..lineTo(at(1, 0.6).dx, at(1, 0.6).dy),
+      edge,
+    );
+    // küçük çukurlar
+    final pit = Paint()..color = const Color(0x55262A36);
+    for (final (x, y, s) in [
+      (-0.5, 0.45, 0.09),
+      (0.45, -0.4, 0.07),
+      (0.55, 0.45, 0.06),
+      (-0.3, -0.55, 0.05),
+    ]) {
+      canvas.drawCircle(at(x, y), radius * s, pit);
+      canvas.drawCircle(
+        at(x - s * 0.4, y - s * 0.4),
+        radius * s * 0.5,
+        Paint()..color = const Color(0x22FFFFFF),
+      );
+    }
+    canvas.restore();
     canvas.drawCircle(
       c,
       radius,
@@ -1429,25 +1504,14 @@ class GamePainter extends CustomPainter {
         ..strokeWidth = radius * 0.1
         ..color = const Color(0xFF2B2F3D),
     );
-    final crack =
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = radius * 0.09
-          ..strokeCap = StrokeCap.round
-          ..color = const Color(0xFF353A4A);
-    canvas.drawPath(
-      Path()
-        ..moveTo(c.dx - radius * 0.5, c.dy - radius * 0.15)
-        ..lineTo(c.dx - radius * 0.1, c.dy + radius * 0.05)
-        ..lineTo(c.dx + radius * 0.05, c.dy - radius * 0.35)
-        ..moveTo(c.dx - radius * 0.1, c.dy + radius * 0.05)
-        ..lineTo(c.dx + radius * 0.35, c.dy + radius * 0.4),
-      crack,
-    );
-    canvas.drawCircle(
-      c + Offset(-radius * 0.35, -radius * 0.42),
-      radius * 0.16,
-      Paint()..color = Colors.white.withValues(alpha: 0.35),
+    // üst parlama (cilasız taş: küçük ve mat)
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: at(-0.42, -0.5),
+        width: radius * 0.36,
+        height: radius * 0.18,
+      ),
+      Paint()..color = Colors.white.withValues(alpha: 0.28),
     );
   }
 
@@ -1499,14 +1563,92 @@ class GamePainter extends CustomPainter {
     }
   }
 
+  /// Balonların en alt sırası tehlike çizgisine ne kadar yakın (0 uzak, 1 dibinde).
+  double _dangerLevel() {
+    for (var row = g.grid.length - 1; row >= 0; row--) {
+      if (g.grid[row].any((v) => v != null)) {
+        final left = g.maxRows - 1 - row;
+        return left >= 3 ? 0 : (3 - left) / 3;
+      }
+    }
+    return 0;
+  }
+
+  /// Arka planda yavaşça yükselen soluk balonlar.
+  void _bokeh(Canvas canvas, Size size) {
+    final t = g.time;
+    for (var i = 0; i < 14; i++) {
+      final speed = 10.0 + (i % 4) * 7;
+      final span = size.height + 120;
+      final y = span - ((t * speed + i * 137.0) % span) - 60;
+      final x =
+          ((i * 61) % 100) / 100 * size.width + sin(t * 0.4 + i * 1.7) * 14;
+      final rad = g.r * (0.35 + (i % 5) * 0.18);
+      canvas.drawCircle(
+        Offset(x, y),
+        rad,
+        Paint()
+          ..color = bubbleColors[i % bubbleColors.length].withValues(
+            alpha: 0.06,
+          ),
+      );
+      canvas.drawCircle(
+        Offset(x - rad * 0.3, y - rad * 0.3),
+        rad * 0.25,
+        Paint()..color = Colors.white.withValues(alpha: 0.05),
+      );
+    }
+  }
+
+  /// Giriş (yukarıdan kayma) ve çarpışma sallanması ile balonun çizim yeri.
+  Offset _bubblePos(int row, int c) {
+    var p = g.cellCenter(row, c);
+    // giriş animasyonu: sıralar sırayla yukarıdan iner
+    final k = ((g.time - row * 0.04) / 0.5).clamp(0.0, 1.0);
+    if (k < 1) {
+      final e = 1 - pow(1 - k, 3).toDouble();
+      p = p.translate(0, -(1 - e) * (row + 4) * g.rowH);
+    }
+    // çarpışma: yakın komşular dışa doğru kısa bir esneme yapar
+    final ip = g.impactPos;
+    if (ip != null && g.impactT < 0.32) {
+      final d = p - ip;
+      final dist = d.distance;
+      final reach = g.r * 4.5;
+      if (dist > 1 && dist < reach) {
+        final amp =
+            g.r * 0.28 * (1 - dist / reach) * sin(g.impactT / 0.32 * pi);
+        p += d / dist * amp;
+      }
+    }
+    return p;
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     final r = g.r;
+    _bokeh(canvas, size);
 
-    // tehlike çizgisi
+    // tehlike çizgisi (balonlar yaklaştıkça kırmızı nabız atar)
     final dy = g.dangerY;
+    final danger = _dangerLevel();
+    if (danger > 0) {
+      final pulse = 0.5 + 0.5 * sin(g.time * 7);
+      canvas.drawRect(
+        Rect.fromLTWH(0, dy - r * 2.2, size.width, r * 2.2),
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.transparent,
+              LP.ruby.withValues(alpha: 0.28 * danger * (0.5 + pulse * 0.5)),
+            ],
+          ).createShader(Rect.fromLTWH(0, dy - r * 2.2, size.width, r * 2.2)),
+      );
+    }
     canvas.drawRect(
-      Rect.fromLTWH(0, dy - 1, size.width, 2),
+      Rect.fromLTWH(0, dy - 1 - danger * 1.5, size.width, 2 + danger * 3),
       Paint()
         ..shader = LinearGradient(
           colors: [
@@ -1541,10 +1683,12 @@ class GamePainter extends CustomPainter {
     for (var row = 0; row < g.grid.length; row++) {
       for (var c = 0; c < g.rowLen(row); c++) {
         final v = g.grid[row][c];
+        if (v == null) continue;
+        final p = _bubblePos(row, c);
         if (v == stone) {
-          drawStone(canvas, g.cellCenter(row, c), r * 0.93);
-        } else if (v != null) {
-          drawBubble(canvas, g.cellCenter(row, c), r * 0.93, bubbleColors[v]);
+          drawStone(canvas, p, r * 0.93);
+        } else {
+          drawBubble(canvas, p, r * 0.93, bubbleColors[v]);
         }
       }
     }
@@ -1586,32 +1730,83 @@ class GamePainter extends CustomPainter {
       }
     }
 
+    // uçuşan puan yazıları
+    for (final f in g.floats) {
+      final k = (f.t / 0.9).clamp(0.0, 1.0);
+      final tp = TextPainter(
+        text: TextSpan(
+          text: f.text,
+          style: outfit(
+            r * 0.95,
+            w: FontWeight.w900,
+            color: Colors.white.withValues(alpha: 1 - k * k),
+            shadows: [
+              Shadow(
+                color: bubbleColors[f.color].withValues(alpha: 1 - k),
+                blurRadius: 8,
+              ),
+              const Shadow(color: Color(0xAA1A0730), offset: Offset(0, 2)),
+            ],
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      final scale = k < 0.15 ? 0.6 + k / 0.15 * 0.5 : 1.1 - (k - 0.15) * 0.15;
+      canvas.save();
+      canvas.translate(f.pos.dx, f.pos.dy - k * r * 2.6);
+      canvas.scale(scale);
+      tp.paint(canvas, Offset(-tp.width / 2, -tp.height / 2));
+      canvas.restore();
+    }
+
     // nişan çizgisi
     if (g.aiming && g.ballPos == null && g.state == GameState.playing) {
       final color = switch (g.armed) {
         ShotKind.fire => const Color(0xFFFF7A1A),
         ShotKind.rainbow => Colors.white,
-        _ => LP.cyan,
+        ShotKind.laser => LP.cyan,
+        ShotKind.normal => bubbleColors[g.current],
       };
       var pos = g.shooter;
       var dir = Offset(cos(g.aimAngle), sin(g.aimAngle));
       final step = r * 0.5;
       final dot = Paint();
+      var bounces = 0;
       for (var i = 0; i < 200; i++) {
         pos += dir * step;
-        if (pos.dx < r) {
-          pos = Offset(r, pos.dy);
-          dir = Offset(dir.dx.abs(), dir.dy);
+        if (pos.dx < r || pos.dx > size.width - r) {
+          pos = Offset(pos.dx.clamp(r, size.width - r), pos.dy);
+          dir = Offset(pos.dx <= r ? dir.dx.abs() : -dir.dx.abs(), dir.dy);
+          // en fazla 2 sekme gösterilir; ekran noktalarla dolmasın
+          if (++bounces > 2) break;
         }
-        if (pos.dx > size.width - r) {
-          pos = Offset(size.width - r, pos.dy);
-          dir = Offset(-dir.dx.abs(), dir.dy);
+        if (pos.dy < r || (g.armed != ShotKind.fire && _near(pos))) {
+          // hedef: balonun oturacağı yerde hayalet balon
+          if (g.armed == ShotKind.normal || g.armed == ShotKind.rainbow) {
+            final cell = g.landingCell(Offset(pos.dx, max(pos.dy, r)));
+            if (cell != null) {
+              final at = g.cellCenter(cell.$1, cell.$2);
+              final pulse = 0.5 + 0.5 * sin(g.time * 6);
+              canvas.drawCircle(
+                at,
+                r * 0.9,
+                Paint()..color = color.withValues(alpha: 0.18 + 0.1 * pulse),
+              );
+              canvas.drawCircle(
+                at,
+                r * 0.9,
+                Paint()
+                  ..style = PaintingStyle.stroke
+                  ..strokeWidth = r * 0.12
+                  ..color = color.withValues(alpha: 0.65 + 0.3 * pulse),
+              );
+            }
+          }
+          break;
         }
-        if (pos.dy < r) break;
-        if (g.armed != ShotKind.fire && _near(pos)) break;
         if (i % 3 == 0 && i > 3) {
-          dot.color = color.withValues(alpha: max(0.2, 0.95 - i / 260));
-          canvas.drawCircle(pos, r * 0.13, dot);
+          dot.color = color.withValues(alpha: max(0.25, 0.95 - i / 260));
+          canvas.drawCircle(pos, r * (0.15 - min(i, 120) / 2400), dot);
         }
       }
     }

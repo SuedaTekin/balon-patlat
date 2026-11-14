@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -14,8 +16,9 @@ Future<void> main() async {
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   await Progress.load();
   await Cloud.init();
-  await Sfx.init();
+  // sesler arka planda yüklenir; açılışı bekletmez
   Sfx.playMusic('menu');
+  unawaited(Sfx.init());
   Billing.init();
   Ads.init();
   runApp(const BalonApp());

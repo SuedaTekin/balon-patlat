@@ -26,6 +26,15 @@ class Particle {
   Particle(this.pos, this.vel, this.color, this.falling);
 }
 
+/// Patlamanın olduğu yerde yükselip kaybolan puan yazısı.
+class FloatText {
+  FloatText(this.pos, this.text, this.color);
+  final Offset pos;
+  final String text;
+  final int color;
+  double t = 0;
+}
+
 typedef Cell = (int, int);
 
 /// Taş balon: eşleşmez, sadece altındaki bağ kopunca düşer ya da
@@ -139,6 +148,14 @@ class BubbleGame {
   String? comboText;
   double comboTimer = 0;
   final List<Particle> particles = [];
+  final List<FloatText> floats = [];
+
+  /// Bölüm başından beri geçen süre (giriş animasyonu, arka plan).
+  double time = 0;
+
+  /// Son çarpışma noktası ve üstünden geçen süre (komşu sallanması).
+  Offset? impactPos;
+  double impactT = 9;
   bool _ready = false;
 
   void Function(int popped)? onPop;
@@ -241,9 +258,19 @@ class BubbleGame {
     state = GameState.playing;
     armed = ShotKind.normal;
     particles.clear();
+    floats.clear();
     ballPos = null;
     comboText = null;
+    time = 0;
+    impactPos = null;
     _generate();
+  }
+
+  /// Nişan çizgisinin değdiği noktada balonun oturacağı hücre.
+  Cell? landingCell(Offset pos) {
+    final approx = ((pos.dy - r) / rowH).round();
+    return _nearestEmpty(pos, approx - 1, approx + 1, true) ??
+        _nearestEmpty(pos, 0, grid.length - 1, false);
   }
 
   BubbleGame clone() {
@@ -348,7 +375,8 @@ class BubbleGame {
     final v = p - shooter;
     var a = atan2(v.dy, v.dx);
     if (v.dy >= 0) a = v.dx < 0 ? -pi : 0;
-    aimAngle = a.clamp(-pi + 0.12, -0.12);
+    // çok yatık açılar sonsuz sekmeye yol açar; en az ~11°
+    aimAngle = a.clamp(-pi + 0.2, -0.2);
   }
 
   void swap() {
@@ -401,6 +429,12 @@ class BubbleGame {
   // ---------- döngü ----------
   void update(double dt) {
     dt = min(dt, 1 / 30);
+    time += dt;
+    impactT += dt;
+    for (final f in floats) {
+      f.t += dt;
+    }
+    floats.removeWhere((f) => f.t > 0.9);
     for (final p in particles) {
       p.t += dt;
       if (p.falling) {
@@ -439,6 +473,7 @@ class BubbleGame {
         if (hit.isNotEmpty) _firePopped += _pop(hit);
         if (pos.dy <= r) {
           ballPos = null;
+          impactPos = Offset(pos.dx, height * 0.25);
           _finishShot(_firePopped);
           return;
         }
@@ -490,15 +525,14 @@ class BubbleGame {
   }
 
   void _snap(Offset pos) {
-    final approx = ((pos.dy - r) / rowH).round();
-    final cell =
-        _nearestEmpty(pos, approx - 1, approx + 1, true) ??
-        _nearestEmpty(pos, 0, grid.length - 1, false);
+    final cell = landingCell(pos);
     if (cell == null) {
       state = GameState.lostDanger;
       return;
     }
     final (row, c) = cell;
+    impactPos = cellCenter(row, c);
+    impactT = 0;
 
     if (ballKind == ShotKind.laser) {
       // çarpılan balonun sırası (tavana çarptıysa oturduğu sıra) tamamen silinir
@@ -602,6 +636,13 @@ class BubbleGame {
       combo++;
       final pts = (popped * 10 + dropped * 20) * combo;
       score += pts;
+      floats.add(
+        FloatText(
+          impactPos ?? Offset(width / 2, height * 0.3),
+          '+$pts',
+          isColor(ballColor) ? ballColor : 0,
+        ),
+      );
       if (combo >= 2) {
         comboText = 'X$combo COMBO! +$pts';
         comboTimer = 1.6;

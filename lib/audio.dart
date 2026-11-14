@@ -42,6 +42,12 @@ class Sfx {
       await _music.setReleaseMode(ReleaseMode.loop);
       await _music.setVolume(0.45);
       _ready = true;
+      // yüklenirken istenen müziği şimdi başlat
+      final t = _track;
+      if (t != null) {
+        _track = null;
+        await playMusic(t);
+      }
     } catch (e) {
       debugPrint('Ses başlatılamadı: $e');
     }
