@@ -79,7 +79,7 @@ class PassPage extends StatefulWidget {
 
 class _PassPageState extends State<PassPage> {
   late final ScrollController _ctrl = ScrollController(
-    initialScrollOffset: max(0, (Progress.passTier - 1) * 92.0),
+    initialScrollOffset: max(0, (Progress.passTier - 1) * 68.0),
   );
 
   @override
@@ -371,9 +371,10 @@ class _PassPageState extends State<PassPage> {
     final reached = t <= tier;
     final current = t == tier + 1 || (t == tier && tier == Progress.passTiers);
     return Container(
-      height: 84,
-      margin: const EdgeInsets.only(bottom: 8),
+      height: 62,
+      margin: const EdgeInsets.only(bottom: 6),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(child: _rewardCell(t, false, reached)),
           SizedBox(
