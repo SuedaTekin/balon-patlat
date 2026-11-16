@@ -449,6 +449,24 @@ class _LevelIntroState extends State<_LevelIntro> {
           ),
           '${cfg.iceCount} buz balon',
         ),
+      if (cfg.virusCount > 0)
+        _chip(
+          const Icon(
+            Icons.coronavirus_rounded,
+            color: Color(0xFF5BE04A),
+            size: 20,
+          ),
+          '${cfg.virusCount} virüs balon',
+        ),
+      if (cfg.chamCount > 0)
+        _chip(
+          const Icon(
+            Icons.autorenew_rounded,
+            color: Color(0xFFFF8FD8),
+            size: 20,
+          ),
+          '${cfg.chamCount} bukalemun balon',
+        ),
       if (cfg.shotsPerRow > 0)
         _chip(
           const Icon(

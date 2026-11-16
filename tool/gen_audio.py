@@ -180,4 +180,10 @@ save("ice", mix(
     [0] * int(0.03 * SR) + tone(lambda t: 3520, 0.18, wave_fn=math.sin, vol=0.16),
     [0] * int(0.06 * SR) + tone(lambda t: 1976, 0.2, wave_fn=tri, vol=0.14),
 ))
+
+# virüs yayılması: titrek, alçalan "vıhh" (sona eklendi)
+save("virus", lowpass(mix(
+    tone(lambda t: 420 - t * 700 + 40 * math.sin(t * 90), 0.32, wave_fn=sq, vol=0.22),
+    tone(lambda t: 210 - t * 300, 0.32, wave_fn=tri, vol=0.3),
+), 0.3))
 print("ok")

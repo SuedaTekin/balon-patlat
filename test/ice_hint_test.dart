@@ -41,6 +41,70 @@ void main() {
     expect(g.grid[0][3], isNull);
   });
 
+  test('virüs ve bukalemun ileri bölümlerde gelir', () {
+    expect(LevelConfig.forLevel(69).virusCount, 0);
+    expect(LevelConfig.forLevel(71).virusCount, 1);
+    expect(LevelConfig.forLevel(99).chamCount, 0);
+    expect(LevelConfig.forLevel(101).chamCount, 2);
+    final g = _game(250);
+    expect(g.virusLeft, greaterThan(0));
+    var cham = 0;
+    for (final row in g.grid) {
+      cham += row.where(isCham).length;
+    }
+    expect(cham, greaterThan(0));
+  });
+
+  test('yanındaki balon patlayınca virüs yok olur', () {
+    final g = _game(71);
+    g.grid = [for (final row in g.grid) List<int?>.filled(row.length, null)];
+    g.grid[0][3] = virusCell;
+    g.grid[0][4] = 1;
+    g.popCells([(0, 4)]);
+    expect(g.grid[0][3], isNull);
+    expect(g.virusKilled, 1);
+  });
+
+  test('bukalemun o anki rengiyle eşleşir', () {
+    expect(matchColor(chamBase + 2), 2);
+    expect(matchColor(iceBase + 2), -1);
+    expect(matchColor(virusCell), -1);
+    expect(shownColor(chamBase + 4), 4);
+  });
+
+  test('ıskada virüs yayılır, bukalemun renk değiştirir', () {
+    final g = _game(120);
+    // üstte tek sıra: virüs + yanında renkli balonlar; bukalemun ayrı
+    g.grid = [for (final row in g.grid) List<int?>.filled(row.length, null)];
+    g.grid[0][0] = virusCell;
+    g.grid[0][1] = 0;
+    g.grid[0][9] = chamBase + 0;
+    g.current = 1;
+    g.aimAngle = -0.35; // sağa doğru, kimseyi patlatmadan yapışır
+    g.fire();
+    for (var k = 0; k < 400 && g.ballPos != null; k++) {
+      g.update(1 / 60);
+    }
+    expect(g.grid[0][1], virusCell, reason: 'virüs yanındaki balona yayılmalı');
+    expect(g.grid[0][9], chamBase + 1, reason: 'bukalemun sıradaki renge geçmeli');
+  });
+
+  test('sadece virüs kalınca bölüm kazanılır', () {
+    final g = _game(71);
+    g.grid = [for (final row in g.grid) List<int?>.filled(row.length, null)];
+    g.grid[0][3] = virusCell;
+    g.grid[0][4] = 2;
+    g.grid[0][5] = 2;
+    g.current = 2;
+    // iki sarının yanına üçüncü sarıyı at: sarılar patlar, virüs de gider
+    g.aimAngle = g.bestAim()!;
+    g.fire();
+    for (var k = 0; k < 400 && g.ballPos != null; k++) {
+      g.update(1 / 60);
+    }
+    expect(g.state, GameState.won);
+  });
+
   test('ipucu patlatan bir açı bulur', () {
     final g = _game(1);
     final a = g.bestAim();

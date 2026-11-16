@@ -55,6 +55,9 @@ class _GameScreenState extends State<GameScreen>
   ShotKind? _prepaid;
   static int _open = 0;
 
+  /// Bölgeye göre arka plan teması.
+  late final FieldTheme _theme = themeForLevel(widget.level);
+
   /// Oyuncu atış yapmadan geçen süre; [hintDelay] dolunca ipucu gösterilir.
   double _idle = 0;
   bool _hintTried = false;
@@ -148,6 +151,20 @@ class _GameScreenState extends State<GameScreen>
         'YENİ: TAŞ BALON',
         'Taşlar patlamaz! Altındakileri koparıp düşür ya da Ateş ve Lazer ile kır.',
         const Color(0xFF9AA3B5),
+      );
+    }
+    if (level == 70) {
+      return (
+        'YENİ: VİRÜS BALON',
+        'Iska attıkça virüs yayılır! Yanındaki balonu patlatıp hemen yok et.',
+        const Color(0xFF5BE04A),
+      );
+    }
+    if (level == 100) {
+      return (
+        'YENİ: BUKALEMUN BALON',
+        'Her atıştan sonra renk değiştirir. Doğru anı kolla!',
+        const Color(0xFFFF8FD8),
       );
     }
     if (level == 40) {
@@ -575,7 +592,7 @@ class _GameScreenState extends State<GameScreen>
   Widget _scaffold() {
     return Scaffold(
       body: Container(
-        decoration: bgGradient,
+        decoration: _theme.decoration,
         child: SafeArea(
           child: Stack(
             children: [
@@ -911,7 +928,7 @@ class _GameScreenState extends State<GameScreen>
                   },
                   child: CustomPaint(
                     size: Size(c.maxWidth, c.maxHeight),
-                    painter: GamePainter(game),
+                    painter: GamePainter(game, _theme),
                   ),
                 ),
                 if (game.praise != null) _praiseBanner(),
@@ -1659,11 +1676,66 @@ class _SadBubble extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
+// =================== bölge temaları ===================
+
+/// Oyun ekranının arka planı her bölgede (10 bölüm) değişir.
+class FieldTheme {
+  const FieldTheme(this.name, this.bg, this.bokeh, {this.stars = false});
+  final String name;
+
+  /// Ortadan dışa radyal arka plan renkleri.
+  final List<Color> bg;
+
+  /// Arka planda yükselen soluk balonların renkleri.
+  final List<Color> bokeh;
+
+  /// Arka planda göz kırpan yıldızlar.
+  final bool stars;
+
+  BoxDecoration get decoration => BoxDecoration(
+    gradient: RadialGradient(
+      center: const Alignment(0, -0.3),
+      radius: 1.2,
+      colors: bg,
+      stops: const [0, 0.55, 1],
+    ),
+  );
+}
+
+const fieldThemes = [
+  FieldTheme('Mor Gece', [Color(0xFF241650), LP.bg, LP.bgDeep], bubbleColors),
+  FieldTheme(
+    'Okyanus',
+    [Color(0xFF0F4A6E), Color(0xFF0A2B4A), Color(0xFF051528)],
+    [Color(0xFF00D8F5), Color(0xFF10E56A), Color(0xFF6FA8FF)],
+  ),
+  FieldTheme(
+    'Gün Batımı',
+    [Color(0xFF6A2450), Color(0xFF3A1640), Color(0xFF1B0B24)],
+    [Color(0xFFFF4E7C), Color(0xFFFF7A1A), Color(0xFFFFB800)],
+  ),
+  FieldTheme(
+    'Orman',
+    [Color(0xFF145A3E), Color(0xFF0C3328), Color(0xFF061A16)],
+    [Color(0xFF10E56A), Color(0xFFFFB800), Color(0xFFB6FF6A)],
+  ),
+  FieldTheme(
+    'Galaksi',
+    [Color(0xFF2A1F72), Color(0xFF130F3D), Color(0xFF060518)],
+    [Color(0xFFA25CFF), Color(0xFF00D8F5), Color(0xFFFF8FD8)],
+    stars: true,
+  ),
+];
+
+FieldTheme themeForLevel(int level) =>
+    fieldThemes[((level - 1) ~/ 10) % fieldThemes.length];
+
 // =================== oyun alanı çizimi ===================
 
 class GamePainter extends CustomPainter {
-  GamePainter(this.g);
+  GamePainter(this.g, [this.theme = const FieldTheme('', [], bubbleColors)]);
   final BubbleGame g;
+  final FieldTheme theme;
 
   static void _icon(
     Canvas canvas,
@@ -1905,6 +1977,99 @@ class GamePainter extends CustomPainter {
     }
   }
 
+  /// Virüs balon: zehir yeşili, nabız atan dikenli gövde ve kızgın yüz.
+  static void drawVirus(Canvas canvas, Offset c, double radius, [double t = 0]) {
+    const body = Color(0xFF5BE04A);
+    final pulse = 1 + 0.05 * sin(t * 6);
+    canvas.drawCircle(
+      c,
+      radius * 1.1,
+      Paint()
+        ..color = body.withValues(alpha: 0.3 + 0.15 * sin(t * 6))
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, radius * 0.4),
+    );
+    // dikenler
+    final spike = Paint()..color = const Color(0xFF2FA82A);
+    for (var i = 0; i < 8; i++) {
+      final a = i * pi / 4 + t * 0.6;
+      final tip = c + Offset(cos(a), sin(a)) * radius * 1.02 * pulse;
+      canvas.drawCircle(tip, radius * 0.16, spike);
+      canvas.drawLine(
+        c,
+        tip,
+        Paint()
+          ..strokeWidth = radius * 0.14
+          ..color = const Color(0xFF2FA82A),
+      );
+    }
+    drawBubble(canvas, c, radius * 0.82 * pulse, body, glow: false);
+    // benekler
+    final dot = Paint()..color = const Color(0xFF2E9E2A).withValues(alpha: 0.8);
+    canvas.drawCircle(c + Offset(-radius * 0.38, radius * 0.3), radius * 0.1, dot);
+    canvas.drawCircle(c + Offset(radius * 0.42, radius * 0.22), radius * 0.08, dot);
+    // kızgın gözler
+    final eye = Paint()..color = const Color(0xFF14320F);
+    for (final s in [-1.0, 1.0]) {
+      final e = c + Offset(s * radius * 0.25, -radius * 0.08);
+      canvas.drawCircle(e, radius * 0.12, eye);
+      canvas.drawLine(
+        e + Offset(-s * radius * 0.2, -radius * 0.24),
+        e + Offset(s * radius * 0.08, -radius * 0.14),
+        Paint()
+          ..strokeWidth = radius * 0.08
+          ..strokeCap = StrokeCap.round
+          ..color = const Color(0xFF14320F),
+      );
+    }
+    // ağız
+    canvas.drawArc(
+      Rect.fromCenter(
+        center: c + Offset(0, radius * 0.35),
+        width: radius * 0.4,
+        height: radius * 0.22,
+      ),
+      pi,
+      pi,
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = radius * 0.08
+        ..strokeCap = StrokeCap.round
+        ..color = const Color(0xFF14320F),
+    );
+  }
+
+  /// Bukalemun balon: o anki rengi, etrafında dönen gökkuşağı halkası ve
+  /// renk değişeceğini anlatan küçük oklar.
+  static void drawCham(
+    Canvas canvas,
+    Offset c,
+    double radius,
+    Color color, [
+    double t = 0,
+  ]) {
+    drawBubble(canvas, c, radius * 0.86, color, glow: false);
+    final rect = Rect.fromCircle(center: c, radius: radius * 0.98);
+    canvas.drawCircle(
+      c,
+      radius * 0.98,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = radius * 0.16
+        ..shader = SweepGradient(
+          colors: [...bubbleColors, bubbleColors.first],
+          transform: GradientRotation(t * 2.2),
+        ).createShader(rect),
+    );
+    _icon(
+      canvas,
+      Icons.autorenew_rounded,
+      c,
+      radius * 0.95,
+      Colors.white.withValues(alpha: 0.85),
+    );
+  }
+
   /// Bomba balon: parlak siyah gövde, fitil ve kıvılcım, kırmızı halka.
   static void drawBomb(Canvas canvas, Offset c, double radius, [double t = 0]) {
     canvas.drawCircle(
@@ -2023,6 +2188,19 @@ class GamePainter extends CustomPainter {
   /// Arka planda yavaşça yükselen soluk balonlar.
   void _bokeh(Canvas canvas, Size size) {
     final t = g.time;
+    if (theme.stars) {
+      // galaksi: sabit konumlarda göz kırpan küçük yıldızlar
+      for (var i = 0; i < 26; i++) {
+        final x = ((i * 73) % 100) / 100 * size.width;
+        final y = ((i * 41 + 13) % 100) / 100 * size.height * 0.85;
+        final tw = 0.5 + 0.5 * sin(t * (1.5 + i % 4 * 0.6) + i);
+        canvas.drawCircle(
+          Offset(x, y),
+          g.r * (0.06 + (i % 3) * 0.04),
+          Paint()..color = Colors.white.withValues(alpha: 0.15 + 0.45 * tw),
+        );
+      }
+    }
     for (var i = 0; i < 14; i++) {
       final speed = 10.0 + (i % 4) * 7;
       final span = size.height + 120;
@@ -2034,8 +2212,8 @@ class GamePainter extends CustomPainter {
         Offset(x, y),
         rad,
         Paint()
-          ..color = bubbleColors[i % bubbleColors.length].withValues(
-            alpha: 0.06,
+          ..color = theme.bokeh[i % theme.bokeh.length].withValues(
+            alpha: 0.08,
           ),
       );
       canvas.drawCircle(
@@ -2137,6 +2315,16 @@ class GamePainter extends CustomPainter {
           drawBomb(canvas, p, r * 0.93, g.time + row + c);
         } else if (v == goldCell) {
           drawGold(canvas, p, r * 0.93, g.time + row * 0.7 + c);
+        } else if (v == virusCell) {
+          drawVirus(canvas, p, r * 0.93, g.time + row * 0.5 + c * 0.3);
+        } else if (isCham(v)) {
+          drawCham(
+            canvas,
+            p,
+            r * 0.93,
+            bubbleColors[v - chamBase],
+            g.time + row * 0.2 + c * 0.1,
+          );
         } else if (isIce(v)) {
           drawIce(
             canvas,
@@ -2159,6 +2347,8 @@ class GamePainter extends CustomPainter {
         drawBomb(canvas, p.pos, r * 0.93);
       } else if (p.falling && p.color == goldCell) {
         drawGold(canvas, p.pos, r * 0.93);
+      } else if (p.falling && p.color == virusCell) {
+        drawVirus(canvas, p.pos, r * 0.93);
       } else if (p.falling) {
         drawBubble(
           canvas,
@@ -2179,6 +2369,8 @@ class GamePainter extends CustomPainter {
                 ? const Color(0xFFFF4D4D)
                 : p.color == goldCell
                 ? const Color(0xFFFFD54A)
+                : p.color == virusCell
+                ? const Color(0xFF5BE04A)
                 : bubbleColors[p.color];
         canvas.drawCircle(
           p.pos,

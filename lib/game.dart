@@ -59,11 +59,27 @@ const int goldCoins = 15;
 const int iceBase = 50;
 bool isIce(int? v) => v != null && v >= iceBase && v < iceBase + 6;
 
-/// Temizlenmesi gereken (renkli ya da buzlu) balon mu?
-bool isTarget(int? v) => isColor(v) || isIce(v);
+/// Virüs balon: eşleşmez; yanındaki bir balon patlayınca (ya da Ateş/Lazer/
+/// Bomba değince) yok olur. Iska atışlarda yanındaki bir balonu virüse
+/// çevirerek yayılır. Temizlenmesi gerekir.
+const int virusCell = 96;
 
-/// Parçacık/çizim için hücre değerinin görünen rengi (buz → kendi rengi).
-int shownColor(int v) => isIce(v) ? v - iceBase : v;
+/// Bukalemun balon: [chamBase] + renk. Her atıştan sonra rengini değiştirir;
+/// o anki rengiyle eşleşir.
+const int chamBase = 70;
+bool isCham(int? v) => v != null && v >= chamBase && v < chamBase + 6;
+
+/// Temizlenmesi gereken (renkli, buzlu, bukalemun ya da virüs) balon mu?
+bool isTarget(int? v) => isColor(v) || isIce(v) || isCham(v) || v == virusCell;
+
+/// Eşleşmede kullanılan renk (renkli ve bukalemun), yoksa -1.
+int matchColor(int? v) =>
+    isColor(v) ? v! : (isCham(v) ? v! - chamBase : -1);
+
+/// Parçacık/çizim için hücre değerinin görünen rengi (buz/bukalemun → kendi
+/// rengi; özel balonlar kendi değeriyle kalır).
+int shownColor(int v) =>
+    isIce(v) ? v - iceBase : (isCham(v) ? v - chamBase : v);
 
 /// Toplam bölüm sayısı.
 const int maxLevel = 500;
@@ -158,6 +174,17 @@ class LevelConfig {
 
   /// Izgaradaki buz balon sayısı (40. bölümden itibaren 3–8).
   int get iceCount => level < 40 ? 0 : min(8, 3 + (level - 40) ~/ 60);
+
+  /// Virüs balon sayısı (70. bölümden itibaren 1–4; zor bölümde +1).
+  int get virusCount {
+    if (level < 70) return 0;
+    var n = min(4, 1 + (level - 70) ~/ 110);
+    if (kind != LevelKind.normal) n++;
+    return n;
+  }
+
+  /// Bukalemun balon sayısı (100. bölümden itibaren 2–6).
+  int get chamCount => level < 100 ? 0 : min(6, 2 + (level - 100) ~/ 100);
 
   /// Tehlike çizgisinin üstünde boş bırakılan sıra sayısı.
   int get freeRows => level < 10 ? 7 : 6;
@@ -270,6 +297,9 @@ class BubbleGame {
 
   int get iceLeft => grid.fold(0, (s, row) => s + row.where(isIce).length);
 
+  int get virusLeft =>
+      grid.fold(0, (s, row) => s + row.where((v) => v == virusCell).length);
+
   int get stoneCount =>
       grid.fold(0, (s, row) => s + row.where((v) => v == stone).length);
   double get cleared => (1 - bubbleCount / initialCount).clamp(0.0, 1.0);
@@ -368,12 +398,31 @@ class BubbleGame {
         ice++;
       }
     }
+    // Virüsler ve bukalemunlar da renkli balonların yerine konur.
+    var virus = 0, cham = 0;
+    for (var tries = 0; virus < cfg.virusCount && tries < 80; tries++) {
+      final rr = 1 + g.nextInt(max(1, rows - 1));
+      if (rr >= rows) continue;
+      final c = g.nextInt(rowLen(rr));
+      if (isColor(grid[rr][c])) {
+        grid[rr][c] = virusCell;
+        virus++;
+      }
+    }
+    for (var tries = 0; cham < cfg.chamCount && tries < 80; tries++) {
+      final rr = g.nextInt(rows);
+      final c = g.nextInt(rowLen(rr));
+      if (isColor(grid[rr][c])) {
+        grid[rr][c] = chamBase + grid[rr][c]!;
+        cham++;
+      }
+    }
     initialCount = bubbleCount;
-    // taşlar ve buzlar engel olduğu için az da olsa ek hamle verir
+    // engeller az da olsa ek hamle verir
     totalMoves =
         movesFor(initialCount, cfg) +
         (stoneCount * 0.12).ceil() +
-        (ice * 0.8).ceil();
+        (ice * 0.5 + virus * 0.5 + cham * 0.25).ceil();
     movesLeft = totalMoves;
     current = pickColor();
     next = pickColor();
@@ -396,6 +445,7 @@ class BubbleGame {
     shake = 0;
     goldPopped = 0;
     iceBroken = 0;
+    virusKilled = 0;
     hintAngle = null;
     fever = 0;
     superShots = 0;
@@ -514,7 +564,7 @@ class BubbleGame {
     final s = <int>{};
     for (final row in grid) {
       for (final v in row) {
-        if (isTarget(v)) s.add(shownColor(v!));
+        if (isTarget(v) && v != virusCell) s.add(shownColor(v!));
       }
     }
     return s;
@@ -758,11 +808,12 @@ class BubbleGame {
       var bestSize = 0;
       final options = {
         for (final n in neighbors(row, c))
-          if (isColor(grid[n.$1][n.$2])) grid[n.$1][n.$2]!,
+          if (matchColor(grid[n.$1][n.$2]) >= 0) matchColor(grid[n.$1][n.$2]),
       };
       for (final col in options) {
         grid[row][c] = col;
-        final size = _flood(row, c, (a, b) => grid[a][b] == col).length;
+        final size =
+            _flood(row, c, (a, b) => matchColor(grid[a][b]) == col).length;
         if (size > bestSize) {
           bestSize = size;
           bestColor = col;
@@ -772,14 +823,49 @@ class BubbleGame {
     }
 
     grid[row][c] = ballColor;
-    final cluster = _flood(row, c, (a, b) => grid[a][b] == ballColor);
+    final cluster = _flood(
+      row,
+      c,
+      (a, b) => matchColor(grid[a][b]) == ballColor,
+    );
     // yanına top yapışan buzlar çatlar (patlama olmasa da ilerleme sağlar)
     final cracked = _crackAround([(row, c)]);
     _finishShot(cluster.length >= 3 ? _pop(cluster) : 0, cracked: cracked);
   }
 
-  /// Bu bölümde kırılan buz sayısı.
-  int iceBroken = 0;
+  /// Bu bölümde kırılan buz ve yok edilen virüs sayısı.
+  int iceBroken = 0, virusKilled = 0;
+
+  /// Iska atıştan sonra virüs, yanındaki bir renkli balonu virüse çevirir.
+  void _spreadVirus() {
+    final cand = <Cell>[];
+    for (var a = 0; a < grid.length; a++) {
+      for (var b = 0; b < rowLen(a); b++) {
+        if (grid[a][b] != virusCell) continue;
+        for (final nb in neighbors(a, b)) {
+          if (isColor(grid[nb.$1][nb.$2])) cand.add(nb);
+        }
+      }
+    }
+    if (cand.isEmpty) return;
+    final (a, b) = cand[rnd.nextInt(cand.length)];
+    grid[a][b] = virusCell;
+    particles.add(Particle(cellCenter(a, b), Offset.zero, virusCell, false));
+    floats.add(FloatText(cellCenter(a, b), 'VİRÜS!', 3));
+    onSfx?.call('virus');
+  }
+
+  /// Her atıştan sonra bukalemunlar sıradaki renge geçer.
+  void _shiftChameleons() {
+    for (final row in grid) {
+      for (var b = 0; b < row.length; b++) {
+        final v = row[b];
+        if (isCham(v)) {
+          row[b] = chamBase + (v! - chamBase + 1) % cfg.colors;
+        }
+      }
+    }
+  }
 
   /// Verilen hücrelerin komşusu olan buzları kırar; kırılan sayıyı döner.
   int _crackAround(Iterable<Cell> cells) {
@@ -843,7 +929,9 @@ class BubbleGame {
       particles.add(Particle(cellCenter(a, b), Offset.zero, shownColor(v), false));
       grid[a][b] = null;
       popped.add((a, b));
-      if (isTarget(v)) {
+      if (v == virusCell) {
+        virusKilled++;
+      } else if (isTarget(v)) {
         final col = shownColor(v);
         _shotColors[col] = (_shotColors[col] ?? 0) + 1;
         if (isIce(v)) iceBroken++;
@@ -857,10 +945,10 @@ class BubbleGame {
       } else if (v == goldCell) {
         _awardGold(cellCenter(a, b));
       } else {
-        // komşudaki bombayı ve altın balonu tetikle
+        // komşudaki bombayı, altın balonu ve virüsü tetikle
         for (final nb in neighbors(a, b)) {
           final w = grid[nb.$1][nb.$2];
-          if (w == bombCell || w == goldCell) queue.add(nb);
+          if (w == bombCell || w == goldCell || w == virusCell) queue.add(nb);
         }
       }
       n++;
@@ -950,6 +1038,7 @@ class BubbleGame {
     } else {
       combo = 0;
       onSfx?.call('stick');
+      if (cracked == 0) _spreadVirus();
       // buz kırmak da işe yarar bir atıştır: yeni sıra sayacını ilerletmez
       if (cracked == 0 && cfg.shotsPerRow > 0) {
         missCount++;
@@ -960,10 +1049,27 @@ class BubbleGame {
         }
       }
     }
+    _shiftChameleons();
     _checkEnd();
   }
 
   void _checkEnd() {
+    // sadece virüs kaldıysa (yanlarında patlatılacak balon yok) kendiliğinden
+    // söner; oyuncu takılı kalmaz
+    if (bubbleCount > 0 && bubbleCount == virusLeft) {
+      for (var a = 0; a < grid.length; a++) {
+        for (var b = 0; b < rowLen(a); b++) {
+          if (grid[a][b] == virusCell) {
+            particles.add(
+              Particle(cellCenter(a, b), Offset.zero, virusCell, false),
+            );
+            grid[a][b] = null;
+            virusKilled++;
+            score += 50;
+          }
+        }
+      }
+    }
     if (bubbleCount == 0) {
       // kalan taşlar ve bombalar ufalanıp düşer
       for (var a = 0; a < grid.length; a++) {
@@ -989,6 +1095,10 @@ class BubbleGame {
       final ratio = movesLeft / totalMoves;
       stars = ratio >= 0.3 ? 3 : (ratio >= 0.12 ? 2 : 1);
       score += movesLeft * 50;
+      if (movesLeft > 0) {
+        praise = 'HAMLE BONUSU +${movesLeft * 50}';
+        praiseT = 1.6;
+      }
       state = GameState.won;
       return;
     }

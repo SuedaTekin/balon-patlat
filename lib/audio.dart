@@ -20,7 +20,7 @@ class Sfx {
   static const _effects = [
     'pop0', 'pop1', 'pop2', 'pop3', 'shoot', 'bounce', 'stick', 'drop', //
     'stone', 'click', 'coin', 'fire', 'laser', 'rainbow', 'row', 'win',
-    'lose', 'star', 'combo', 'bomb', 'tier', 'ice',
+    'lose', 'star', 'combo', 'bomb', 'tier', 'ice', 'virus',
   ];
 
   static Future<void> init() async {
