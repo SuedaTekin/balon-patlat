@@ -164,4 +164,20 @@ for rep in range(4):
     for s, n, l in riff:
         game_mel.append((s + rep * 8, n + (0 if rep % 2 == 0 else -2), l))
 music("music_game", 124, [C, G, Am, F, C, G, F, G], game_mel, tri, lead_vol=0.2)
+
+# buz kırılması: cam gibi parlak çınlama + kısa çıtırtı (sona eklendi; önceki
+# seslerin rastgele dizisi değişmesin)
+def highpass(x, a=0.6):
+    out, prev_x, prev_y = [], 0.0, 0.0
+    for v in x:
+        prev_y = a * (prev_y + v - prev_x)
+        prev_x = v
+        out.append(prev_y)
+    return out
+save("ice", mix(
+    highpass(noise(0.09, 0.7, 3.0), 0.75),
+    tone(lambda t: 2637, 0.22, wave_fn=math.sin, vol=0.22),
+    [0] * int(0.03 * SR) + tone(lambda t: 3520, 0.18, wave_fn=math.sin, vol=0.16),
+    [0] * int(0.06 * SR) + tone(lambda t: 1976, 0.2, wave_fn=tri, vol=0.14),
+))
 print("ok")

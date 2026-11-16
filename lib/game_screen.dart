@@ -55,6 +55,36 @@ class _GameScreenState extends State<GameScreen>
   ShotKind? _prepaid;
   static int _open = 0;
 
+  /// Oyuncu atış yapmadan geçen süre; [hintDelay] dolunca ipucu gösterilir.
+  double _idle = 0;
+  bool _hintTried = false;
+  static const hintDelay = 7.0;
+
+  void _resetIdle() {
+    _idle = 0;
+    _hintTried = false;
+    game.hintAngle = null;
+  }
+
+  void _updateHint(double dt) {
+    final idle =
+        game.state == GameState.playing &&
+        game.ballPos == null &&
+        !game.aiming &&
+        !_paused &&
+        _intro == null &&
+        Sfx.hints;
+    if (!idle) {
+      if (game.ballPos != null || game.aiming) _resetIdle();
+      return;
+    }
+    _idle += dt;
+    if (_idle >= hintDelay && !_hintTried) {
+      _hintTried = true;
+      game.hintAngle = game.bestAim();
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -118,6 +148,13 @@ class _GameScreenState extends State<GameScreen>
         'YENİ: TAŞ BALON',
         'Taşlar patlamaz! Altındakileri koparıp düşür ya da Ateş ve Lazer ile kır.',
         const Color(0xFF9AA3B5),
+      );
+    }
+    if (level == 40) {
+      return (
+        'YENİ: BUZ BALON',
+        'Buzu kırmak için yanına top at ya da yanındaki balonu patlat. Sonra eşleştir!',
+        const Color(0xFF8FE3FF),
       );
     }
     return switch (cfg.kind) {
@@ -265,6 +302,7 @@ class _GameScreenState extends State<GameScreen>
     _last = elapsed;
     if (!_paused) game.update(dt);
     _applyStart();
+    _updateHint(dt);
     if (game.state == GameState.won && !_handledWin) {
       _handledWin = true;
       if (widget.daily) {
@@ -301,6 +339,7 @@ class _GameScreenState extends State<GameScreen>
 
   void _restart() {
     game.restart();
+    _resetIdle();
     _handledWin = false;
     _newBest = false;
     _lifeTaken = false;
@@ -320,6 +359,7 @@ class _GameScreenState extends State<GameScreen>
     }
     _pointerAiming = true;
     game.aiming = true;
+    _resetIdle();
     game.aimAt(e.localPosition);
   }
 
@@ -712,7 +752,14 @@ class _GameScreenState extends State<GameScreen>
                 if (game.cfg.shotsPerRow > 0)
                   Row(
                     children: [
-                      Text('Yeni sıra ', style: jakarta(10, color: LP.muted)),
+                      Flexible(
+                        child: Text(
+                          'Yeni sıra ',
+                          maxLines: 1,
+                          overflow: TextOverflow.clip,
+                          style: jakarta(10, color: LP.muted),
+                        ),
+                      ),
                       for (var i = 0; i < game.cfg.shotsPerRow; i++)
                         Container(
                           width: 7,
@@ -1785,6 +1832,79 @@ class GamePainter extends CustomPainter {
     );
   }
 
+  /// Buz balon: içinde renkli balon görünen, köşeli buz kabuğu, çatlaklar
+  /// ve gezinen parıltı.
+  static void drawIce(
+    Canvas canvas,
+    Offset c,
+    double radius,
+    Color inner, [
+    double t = 0,
+  ]) {
+    drawBubble(canvas, c, radius * 0.95, inner, glow: false);
+    // altıgen buz kabuğu
+    final hex = Path();
+    for (var i = 0; i < 6; i++) {
+      final a = -pi / 2 + i * pi / 3;
+      final p = c + Offset(cos(a), sin(a)) * radius * 1.04;
+      i == 0 ? hex.moveTo(p.dx, p.dy) : hex.lineTo(p.dx, p.dy);
+    }
+    hex.close();
+    canvas.drawPath(
+      hex,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            const Color(0xFFE6FAFF).withValues(alpha: 0.38),
+            const Color(0xFF8FE3FF).withValues(alpha: 0.0),
+            const Color(0xFFBDEFFF).withValues(alpha: 0.22),
+          ],
+        ).createShader(Rect.fromCircle(center: c, radius: radius)),
+    );
+    canvas.drawPath(
+      hex,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = radius * 0.1
+        ..strokeJoin = StrokeJoin.round
+        ..color = Colors.white.withValues(alpha: 0.9),
+    );
+    // çatlaklar
+    final crack =
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = radius * 0.06
+          ..strokeCap = StrokeCap.round
+          ..color = Colors.white.withValues(alpha: 0.75);
+    Offset at(double x, double y) => c + Offset(x, y) * radius;
+    canvas.drawPath(
+      Path()
+        ..moveTo(at(-0.15, -0.95).dx, at(-0.15, -0.95).dy)
+        ..lineTo(at(0.05, -0.35).dx, at(0.05, -0.35).dy)
+        ..lineTo(at(-0.2, 0.05).dx, at(-0.2, 0.05).dy)
+        ..moveTo(at(0.05, -0.35).dx, at(0.05, -0.35).dy)
+        ..lineTo(at(0.55, -0.2).dx, at(0.55, -0.2).dy),
+      crack,
+    );
+    // gezinen parıltı
+    final k = (t * 0.35) % 1.0;
+    if (k < 0.4) {
+      final x = -0.8 + k / 0.4 * 1.6;
+      canvas.drawLine(
+        at(x - 0.25, 0.55),
+        at(x + 0.25, -0.55),
+        Paint()
+          ..strokeWidth = radius * 0.22
+          ..strokeCap = StrokeCap.round
+          ..color = Colors.white.withValues(
+            alpha: 0.55 * sin(k / 0.4 * pi),
+          ),
+      );
+    }
+  }
+
   /// Bomba balon: parlak siyah gövde, fitil ve kıvılcım, kırmızı halka.
   static void drawBomb(Canvas canvas, Offset c, double radius, [double t = 0]) {
     canvas.drawCircle(
@@ -2017,6 +2137,14 @@ class GamePainter extends CustomPainter {
           drawBomb(canvas, p, r * 0.93, g.time + row + c);
         } else if (v == goldCell) {
           drawGold(canvas, p, r * 0.93, g.time + row * 0.7 + c);
+        } else if (isIce(v)) {
+          drawIce(
+            canvas,
+            p,
+            r * 0.93,
+            bubbleColors[v - iceBase],
+            g.time + row * 0.37 + c * 0.21,
+          );
         } else {
           drawBubble(canvas, p, r * 0.93, bubbleColors[v]);
         }
@@ -2043,7 +2171,9 @@ class GamePainter extends CustomPainter {
       } else {
         final k = (p.t / 0.35).clamp(0.0, 1.0);
         final col =
-            p.color == stone
+            p.color < 0
+                ? const Color(0xFFBDEFFF) // kırılan buz
+                : p.color == stone
                 ? const Color(0xFF9AA3B5)
                 : p.color == bombCell
                 ? const Color(0xFFFF4D4D)
@@ -2116,6 +2246,78 @@ class GamePainter extends CustomPainter {
       canvas.scale(scale);
       tp.paint(canvas, Offset(-tp.width / 2, -tp.height / 2));
       canvas.restore();
+    }
+
+    // ipucu: en iyi atışın yolu (akan noktalar), hedef halkası ve el işareti
+    final hint = g.hintAngle;
+    if (hint != null &&
+        !g.aiming &&
+        g.ballPos == null &&
+        g.state == GameState.playing) {
+      final fade = 0.55 + 0.45 * sin(g.time * 4);
+      var pos = g.shooter;
+      var dir = Offset(cos(hint), sin(hint));
+      final step = r * 0.5;
+      final flow = (g.time * 6) % 4;
+      var bounces = 0;
+      for (var i = 0; i < 200; i++) {
+        pos += dir * step;
+        if (pos.dx < r || pos.dx > size.width - r) {
+          pos = Offset(pos.dx.clamp(r, size.width - r), pos.dy);
+          dir = Offset(pos.dx <= r ? dir.dx.abs() : -dir.dx.abs(), dir.dy);
+          if (++bounces > 2) break;
+        }
+        if (pos.dy < r || _near(pos)) {
+          final cell = g.landingCell(Offset(pos.dx, max(pos.dy, r)));
+          if (cell != null) {
+            final at = g.cellCenter(cell.$1, cell.$2);
+            final k = (g.time * 1.2) % 1.0;
+            canvas.drawCircle(
+              at,
+              r * (0.9 + k * 0.9),
+              Paint()
+                ..style = PaintingStyle.stroke
+                ..strokeWidth = r * 0.14 * (1 - k)
+                ..color = Colors.white.withValues(alpha: 0.8 * (1 - k)),
+            );
+            canvas.drawCircle(
+              at,
+              r * 0.9,
+              Paint()
+                ..color = bubbleColors[g.current].withValues(
+                  alpha: 0.45 * fade,
+                ),
+            );
+            canvas.drawCircle(
+              at,
+              r * 0.9,
+              Paint()
+                ..style = PaintingStyle.stroke
+                ..strokeWidth = r * 0.12
+                ..color = Colors.white.withValues(alpha: 0.85 * fade),
+            );
+          }
+          break;
+        }
+        if (i > 3 && (i + flow.floor()) % 4 == 0) {
+          canvas.drawCircle(
+            pos,
+            r * 0.17,
+            Paint()..color = Colors.white.withValues(alpha: 0.7 * fade),
+          );
+        }
+      }
+      // atıcının üstünde nişan yönünü gösteren, ileri geri kayan el
+      final d = Offset(cos(hint), sin(hint));
+      final bob = (sin(g.time * 5) + 1) / 2;
+      final hand = g.shooter + d * g.ur * (2.2 + bob * 0.8);
+      _icon(
+        canvas,
+        Icons.touch_app_rounded,
+        hand + Offset(0, g.ur * 0.5),
+        g.ur * 1.3,
+        Colors.white.withValues(alpha: 0.9),
+      );
     }
 
     // nişan çizgisi

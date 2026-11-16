@@ -440,6 +440,15 @@ class _LevelIntroState extends State<_LevelIntro> {
           ),
           '${cfg.bombCount} bomba balon',
         ),
+      if (cfg.iceCount > 0)
+        _chip(
+          const Icon(
+            Icons.ac_unit_rounded,
+            color: Color(0xFF8FE3FF),
+            size: 20,
+          ),
+          '${cfg.iceCount} buz balon',
+        ),
       if (cfg.shotsPerRow > 0)
         _chip(
           const Icon(

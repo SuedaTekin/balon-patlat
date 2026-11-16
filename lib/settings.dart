@@ -9,7 +9,7 @@ import 'cloud/ui_common.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
-const appVersion = '1.9.0';
+const appVersion = '1.10.0';
 
 Future<void> showSettings(BuildContext context) =>
     showDialog(context: context, builder: (_) => const _SettingsDialog());
@@ -123,6 +123,12 @@ class _SettingsDialogState extends State<_SettingsDialog> {
           'Titreşim',
           Sfx.vibration,
           (v) => Sfx.set(vibration: v),
+        ),
+        _switch(
+          Icons.lightbulb_rounded,
+          'Atış İpucu',
+          Sfx.hints,
+          (v) => Sfx.set(hints: v),
         ),
         const SizedBox(height: 6),
         _link(Icons.restore_rounded, 'Satın Alımları Geri Yükle', () async {

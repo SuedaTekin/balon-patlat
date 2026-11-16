@@ -53,6 +53,18 @@ const int bombCell = 98;
 const int goldCell = 97;
 const int goldCoins = 15;
 
+/// Buz balon: [iceBase] + renk. İçinde renkli bir balon donmuştur; yanındaki
+/// bir balon patlayınca ya da yanına top yapışınca buz kırılır ve normal
+/// balona döner. Ateş/Lazer/Bomba doğrudan patlatır. Temizlenmesi gerekir.
+const int iceBase = 50;
+bool isIce(int? v) => v != null && v >= iceBase && v < iceBase + 6;
+
+/// Temizlenmesi gereken (renkli ya da buzlu) balon mu?
+bool isTarget(int? v) => isColor(v) || isIce(v);
+
+/// Parçacık/çizim için hücre değerinin görünen rengi (buz → kendi rengi).
+int shownColor(int v) => isIce(v) ? v - iceBase : v;
+
 /// Toplam bölüm sayısı.
 const int maxLevel = 500;
 
@@ -144,6 +156,9 @@ class LevelConfig {
   /// Izgaradaki altın balon sayısı (5. bölümden itibaren 2–3).
   int get goldCount => level < 5 ? 0 : (level % 3 == 0 ? 3 : 2);
 
+  /// Izgaradaki buz balon sayısı (40. bölümden itibaren 3–8).
+  int get iceCount => level < 40 ? 0 : min(8, 3 + (level - 40) ~/ 60);
+
   /// Tehlike çizgisinin üstünde boş bırakılan sıra sayısı.
   int get freeRows => level < 10 ? 7 : 6;
 
@@ -187,6 +202,9 @@ class BubbleGame {
 
   double aimAngle = -pi / 2;
   bool aiming = false;
+
+  /// Gösterilen ipucu açısı (oyuncu bir süre atış yapmazsa ekran ayarlar).
+  double? hintAngle;
   String? comboText;
   double comboTimer = 0;
   final List<Particle> particles = [];
@@ -246,9 +264,11 @@ class BubbleGame {
   Offset get nextPos => shooter + Offset(-ur * 4.4, ur * 0.3);
   double get dangerY => (maxRows - 1) * rowH;
 
-  /// Renkli (temizlenmesi gereken) balon sayısı.
+  /// Renkli ve buzlu (temizlenmesi gereken) balon sayısı.
   int get bubbleCount =>
-      grid.fold(0, (s, row) => s + row.where(isColor).length);
+      grid.fold(0, (s, row) => s + row.where(isTarget).length);
+
+  int get iceLeft => grid.fold(0, (s, row) => s + row.where(isIce).length);
 
   int get stoneCount =>
       grid.fold(0, (s, row) => s + row.where((v) => v == stone).length);
@@ -337,9 +357,23 @@ class BubbleGame {
         k++;
       }
     }
+    // Buz balonlar (40. bölümden itibaren): orta-alt sıralarda dondurulur.
+    var ice = 0;
+    for (var tries = 0; ice < cfg.iceCount && tries < 80; tries++) {
+      final rr = 1 + g.nextInt(max(1, rows - 1));
+      if (rr >= rows) continue;
+      final c = g.nextInt(rowLen(rr));
+      if (isColor(grid[rr][c])) {
+        grid[rr][c] = iceBase + grid[rr][c]!;
+        ice++;
+      }
+    }
     initialCount = bubbleCount;
-    // taşlar engel olduğu için az da olsa ek hamle verir
-    totalMoves = movesFor(initialCount, cfg) + (stoneCount * 0.12).ceil();
+    // taşlar ve buzlar engel olduğu için az da olsa ek hamle verir
+    totalMoves =
+        movesFor(initialCount, cfg) +
+        (stoneCount * 0.12).ceil() +
+        (ice * 0.8).ceil();
     movesLeft = totalMoves;
     current = pickColor();
     next = pickColor();
@@ -361,6 +395,8 @@ class BubbleGame {
     impactPos = null;
     shake = 0;
     goldPopped = 0;
+    iceBroken = 0;
+    hintAngle = null;
     fever = 0;
     superShots = 0;
     praise = null;
@@ -392,6 +428,37 @@ class BubbleGame {
       ..totalMoves = totalMoves
       ..initialCount = initialCount
       ..missCount = missCount;
+  }
+
+  /// İpucu: sıradaki topla en çok balon eksilten nişan açısını bulur
+  /// (birkaç düzine açıyı kopya oyunda dener). İşe yarar atış yoksa null.
+  double? bestAim({int samples = 40}) {
+    if (ballPos != null || state != GameState.playing) return null;
+    double? best;
+    var bestVal = 0.0;
+    for (var i = 0; i <= samples; i++) {
+      final a = -pi + 0.2 + (pi - 0.4) * i / samples;
+      final s = clone()..movesLeft = 999;
+      final before = s.bubbleCount;
+      final ice = s.iceLeft;
+      s.aimAngle = a;
+      s.fire();
+      for (var k = 0; k < 400 && s.ballPos != null; k++) {
+        s.update(1 / 60);
+      }
+      if (s.state == GameState.lostDanger) continue;
+      // patlayan/düşen balonlar + kırılan buzlar (yarım puan);
+      // ortaya yakın açılar eşitlikte tercih edilir
+      final val =
+          (before - s.bubbleCount) +
+          (ice - s.iceLeft) * 0.5 -
+          (a + pi / 2).abs() * 0.01;
+      if (val > bestVal) {
+        bestVal = val;
+        best = a;
+      }
+    }
+    return bestVal >= 1 ? best : null;
   }
 
   // ---------- ızgara yardımcıları ----------
@@ -447,7 +514,7 @@ class BubbleGame {
     final s = <int>{};
     for (final row in grid) {
       for (final v in row) {
-        if (isColor(v)) s.add(v!);
+        if (isTarget(v)) s.add(shownColor(v!));
       }
     }
     return s;
@@ -491,6 +558,7 @@ class BubbleGame {
   ShotKind? fire() {
     if (ballPos != null || state != GameState.playing) return null;
     ballKind = loadedKind;
+    hintAngle = null;
     if (superReady) {
       fever = 0;
       superShots++;
@@ -705,7 +773,33 @@ class BubbleGame {
 
     grid[row][c] = ballColor;
     final cluster = _flood(row, c, (a, b) => grid[a][b] == ballColor);
-    _finishShot(cluster.length >= 3 ? _pop(cluster) : 0);
+    // yanına top yapışan buzlar çatlar (patlama olmasa da ilerleme sağlar)
+    final cracked = _crackAround([(row, c)]);
+    _finishShot(cluster.length >= 3 ? _pop(cluster) : 0, cracked: cracked);
+  }
+
+  /// Bu bölümde kırılan buz sayısı.
+  int iceBroken = 0;
+
+  /// Verilen hücrelerin komşusu olan buzları kırar; kırılan sayıyı döner.
+  int _crackAround(Iterable<Cell> cells) {
+    var n = 0;
+    for (final (a, b) in cells) {
+      for (final nb in neighbors(a, b)) {
+        final w = grid[nb.$1][nb.$2];
+        if (isIce(w)) {
+          grid[nb.$1][nb.$2] = w! - iceBase;
+          // buz kırıntısı: beyaz halka efekti
+          particles.add(Particle(cellCenter(nb.$1, nb.$2), Offset.zero, -1, false));
+          n++;
+        }
+      }
+    }
+    if (n > 0) {
+      iceBroken += n;
+      onSfx?.call('ice');
+    }
+    return n;
   }
 
   /// Bir hücre ve çevresindeki iki halka (patlama alanı).
@@ -741,14 +835,18 @@ class BubbleGame {
     var n = 0;
     var stones = false, bombs = false;
     final queue = cells.toList();
+    final popped = <Cell>[];
     for (var i = 0; i < queue.length; i++) {
       final (a, b) = queue[i];
       final v = grid[a][b];
       if (v == null) continue;
-      particles.add(Particle(cellCenter(a, b), Offset.zero, v, false));
+      particles.add(Particle(cellCenter(a, b), Offset.zero, shownColor(v), false));
       grid[a][b] = null;
-      if (isColor(v)) {
-        _shotColors[v] = (_shotColors[v] ?? 0) + 1;
+      popped.add((a, b));
+      if (isTarget(v)) {
+        final col = shownColor(v);
+        _shotColors[col] = (_shotColors[col] ?? 0) + 1;
+        if (isIce(v)) iceBroken++;
       } else if (v == stone) {
         stones = true;
       }
@@ -767,6 +865,8 @@ class BubbleGame {
       }
       n++;
     }
+    // patlayan balonların yanındaki buzlar çatlar
+    _crackAround(popped);
     if (bombs) {
       onSfx?.call('bomb');
       shake = max(shake, 0.4);
@@ -795,7 +895,7 @@ class BubbleGame {
                 (rnd.nextDouble() - 0.5) * r * 8,
                 -r * rnd.nextDouble() * 6,
               ),
-              v,
+              shownColor(v),
               true,
             ),
           );
@@ -807,7 +907,7 @@ class BubbleGame {
     return dropped;
   }
 
-  void _finishShot(int popped) {
+  void _finishShot(int popped, {int cracked = 0}) {
     final dropped = popped > 0 ? _dropFloating() : 0;
     if (popped > 0) {
       combo++;
@@ -850,7 +950,8 @@ class BubbleGame {
     } else {
       combo = 0;
       onSfx?.call('stick');
-      if (cfg.shotsPerRow > 0) {
+      // buz kırmak da işe yarar bir atıştır: yeni sıra sayacını ilerletmez
+      if (cracked == 0 && cfg.shotsPerRow > 0) {
         missCount++;
         if (missCount >= cfg.shotsPerRow) {
           missCount = 0;

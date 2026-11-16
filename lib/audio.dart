@@ -8,6 +8,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Ses efektleri, müzik ve titreşim. Ayarlar cihazda saklanır.
 class Sfx {
   static bool sound = true, music = true, vibration = true;
+
+  /// Oyuncu bir süre atış yapmazsa en iyi atışı gösteren ipucu (ayarlarda).
+  static bool hints = true;
   static bool _ready = false;
   static final _music = AudioPlayer(playerId: 'music');
   static final Map<String, AudioPool> _pools = {};
@@ -17,7 +20,7 @@ class Sfx {
   static const _effects = [
     'pop0', 'pop1', 'pop2', 'pop3', 'shoot', 'bounce', 'stick', 'drop', //
     'stone', 'click', 'coin', 'fire', 'laser', 'rainbow', 'row', 'win',
-    'lose', 'star', 'combo', 'bomb', 'tier',
+    'lose', 'star', 'combo', 'bomb', 'tier', 'ice',
   ];
 
   static Future<void> init() async {
@@ -25,6 +28,7 @@ class Sfx {
     sound = _prefs!.getBool('snd') ?? true;
     music = _prefs!.getBool('mus') ?? true;
     vibration = _prefs!.getBool('vib') ?? true;
+    hints = _prefs!.getBool('hint') ?? true;
     if (kIsWeb || const bool.fromEnvironment('FLUTTER_TEST')) return;
     try {
       AudioCache.instance = AudioCache(prefix: 'assets/audio/');
@@ -94,8 +98,14 @@ class Sfx {
     if (_ready && music && _track != null) await _music.resume();
   }
 
-  static Future<void> set({bool? sound, bool? music, bool? vibration}) async {
+  static Future<void> set({
+    bool? sound,
+    bool? music,
+    bool? vibration,
+    bool? hints,
+  }) async {
     if (sound != null) Sfx.sound = sound;
+    if (hints != null) Sfx.hints = hints;
     if (vibration != null) Sfx.vibration = vibration;
     if (music != null) {
       Sfx.music = music;
@@ -108,5 +118,6 @@ class Sfx {
     await _prefs?.setBool('snd', Sfx.sound);
     await _prefs?.setBool('mus', Sfx.music);
     await _prefs?.setBool('vib', Sfx.vibration);
+    await _prefs?.setBool('hint', Sfx.hints);
   }
 }
