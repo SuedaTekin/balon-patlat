@@ -29,12 +29,16 @@ class GameScreen extends StatefulWidget {
     required this.level,
     this.start = const StartBoosters(),
     this.daily = false,
+    this.endless = false,
   });
   final int level;
   final StartBoosters start;
 
   /// Günün meydan okuması: kendi dizilimi, bölüm ilerlemesini etkilemez.
   final bool daily;
+
+  /// Sonsuz mod: hamle sınırı yok, can harcamaz, en yüksek puan için.
+  final bool endless;
 
   @override
   State<GameScreen> createState() => _GameScreenState();
@@ -56,7 +60,18 @@ class _GameScreenState extends State<GameScreen>
   static int _open = 0;
 
   /// Bölgeye göre arka plan teması.
-  late final FieldTheme _theme = themeForLevel(widget.level);
+  late final FieldTheme _theme =
+      widget.endless ? fieldThemes.last : themeForLevel(widget.level);
+
+  /// Sonsuz mod sonucu kaydedildi mi?
+  bool _endlessSaved = false;
+
+  /// Sonsuz mod oyununu bir kez kaydeder (çıkarken ya da yeniden başlarken).
+  void _saveEndless() {
+    if (!widget.endless || _endlessSaved || game.score == 0) return;
+    _endlessSaved = true;
+    Progress.recordEndless(game.score);
+  }
 
   /// Oyuncu atış yapmadan geçen süre; [hintDelay] dolunca ipucu gösterilir.
   double _idle = 0;
@@ -92,7 +107,9 @@ class _GameScreenState extends State<GameScreen>
   void initState() {
     super.initState();
     game = BubbleGame(
-      widget.daily
+      widget.endless
+          ? LevelConfig.endlessMode()
+          : widget.daily
           ? LevelConfig.daily(widget.level, todayKey)
           : LevelConfig.forLevel(widget.level),
     );
@@ -119,7 +136,15 @@ class _GameScreenState extends State<GameScreen>
       Progress.save();
     };
     _ticker = createTicker(_tick)..start();
-    _intro = _introFor(widget.level);
+    _intro =
+        widget.endless
+            ? (
+              'SONSUZ MOD',
+              'Hamle sınırı yok! Sıralar durmadan iner, giderek hızlanır. '
+                  'Rekorunu kır!',
+              const Color(0xFFA25CFF),
+            )
+            : _introFor(widget.level);
     if (_intro != null) {
       Future.delayed(const Duration(milliseconds: 2600), () {
         if (mounted) setState(() => _intro = null);
@@ -237,12 +262,17 @@ class _GameScreenState extends State<GameScreen>
 
   /// En az bir atış yapıldıysa ve bölüm kazanılmadıysa bölümden çıkmak can yakar.
   bool get _wouldLoseLife =>
+      !widget.endless &&
       !_lifeTaken &&
       game.state != GameState.won &&
       game.movesLeft < game.totalMoves &&
       !Progress.infinite;
 
   void _forfeit() {
+    if (widget.endless) {
+      _saveEndless();
+      return;
+    }
     // oynanmış bir bölümden kaybederek çıkmak kazanma serisini bozar
     if (!widget.daily &&
         game.state != GameState.won &&
@@ -265,6 +295,10 @@ class _GameScreenState extends State<GameScreen>
 
   Future<void> _retry() async {
     _forfeit();
+    if (widget.endless) {
+      setState(_restart);
+      return;
+    }
     if (!await ensureLife(context)) {
       if (mounted) Navigator.pop(context);
       return;
@@ -348,6 +382,7 @@ class _GameScreenState extends State<GameScreen>
 
   @override
   void dispose() {
+    _saveEndless(); // sonsuz modda hangi yoldan çıkılırsa çıkılsın kaydet
     _ticker.dispose();
     // sonraki bölüme geçerken yeni ekran önce açılır; müzik oyunda kalsın
     if (--_open == 0) Sfx.playMusic('menu');
@@ -362,6 +397,7 @@ class _GameScreenState extends State<GameScreen>
     _lifeTaken = false;
     _adContinueUsed = false;
     _adDoubled = false;
+    _endlessSaved = false;
     // başlangıç güçlendiricileri tek seferliktir; yeniden başlamada gelmez
     _startQueue.clear();
     _prepaid = null;
@@ -612,7 +648,7 @@ class _GameScreenState extends State<GameScreen>
                 ),
               if (game.state == GameState.lostMoves ||
                   game.state == GameState.lostDanger)
-                _defeat(),
+                widget.endless ? _endlessOver() : _defeat(),
             ],
           ),
         ),
@@ -620,8 +656,16 @@ class _GameScreenState extends State<GameScreen>
     );
   }
 
+  /// Üst çubuk: bölümde temizlenen oran; sonsuz modda rekora yaklaşma.
+  double get _barValue =>
+      widget.endless
+          ? (Progress.endlessBest == 0
+              ? 1.0
+              : (game.score / Progress.endlessBest).clamp(0.0, 1.0))
+          : game.cleared;
+
   Widget _hud() {
-    final low = game.movesLeft <= 5;
+    final low = !widget.endless && game.movesLeft <= 5;
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 8, 12, 6),
       padding: const EdgeInsets.all(10),
@@ -679,7 +723,9 @@ class _GameScreenState extends State<GameScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      widget.daily
+                      widget.endless
+                          ? 'SONSUZ'
+                          : widget.daily
                           ? 'GÜNLÜK'
                           : switch (game.cfg.kind) {
                             LevelKind.normal => 'SEVİYE',
@@ -689,7 +735,9 @@ class _GameScreenState extends State<GameScreen>
                       style: outfit(11, color: LP.muted, spacing: 1),
                     ),
                     Text(
-                      widget.daily
+                      widget.endless
+                          ? '∞'
+                          : widget.daily
                           ? '${DateTime.now().day}.${DateTime.now().month}'
                           : '${widget.level}',
                       style: outfit(
@@ -721,7 +769,7 @@ class _GameScreenState extends State<GameScreen>
                       ),
                     ),
                     // şu an kazanılırsa alınacak yıldızlar
-                    for (var i = 0; i < 3; i++)
+                    for (var i = 0; i < (widget.endless ? 0 : 3); i++)
                       AnimatedScale(
                         duration: const Duration(milliseconds: 250),
                         scale: i < game.projectedStars ? 1 : 0.8,
@@ -748,7 +796,7 @@ class _GameScreenState extends State<GameScreen>
                         color: LP.bgDeep,
                         alignment: Alignment.centerLeft,
                         child: FractionallySizedBox(
-                          widthFactor: max(0.03, game.cleared),
+                          widthFactor: max(0.03, _barValue),
                           child: Container(
                             decoration: const BoxDecoration(
                               gradient: LinearGradient(
@@ -760,13 +808,17 @@ class _GameScreenState extends State<GameScreen>
                       ),
                     ),
                     Text(
-                      '%${(game.cleared * 100).round()}',
+                      widget.endless
+                          ? (Progress.endlessBest == 0
+                              ? 'İLK REKORUNU YAP!'
+                              : 'REKOR ${formatNum(Progress.endlessBest)}')
+                          : '%${(game.cleared * 100).round()}',
                       style: outfit(9, color: Colors.white, spacing: 0.5),
                     ),
                   ],
                 ),
                 const SizedBox(height: 4),
-                if (game.cfg.shotsPerRow > 0)
+                if (game.rowEvery > 0)
                   Row(
                     children: [
                       Flexible(
@@ -777,7 +829,7 @@ class _GameScreenState extends State<GameScreen>
                           style: jakarta(10, color: LP.muted),
                         ),
                       ),
-                      for (var i = 0; i < game.cfg.shotsPerRow; i++)
+                      for (var i = 0; i < game.rowEvery; i++)
                         Container(
                           width: 7,
                           height: 7,
@@ -834,9 +886,12 @@ class _GameScreenState extends State<GameScreen>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text('HAMLE', style: outfit(10, color: Colors.white70, spacing: 1)),
           Text(
-            '${game.movesLeft}',
+            widget.endless ? 'SIRA' : 'HAMLE',
+            style: outfit(10, color: Colors.white70, spacing: 1),
+          ),
+          Text(
+            widget.endless ? '${game.rowsAdded}' : '${game.movesLeft}',
             style: outfit(
               26,
               w: FontWeight.w900,
@@ -1469,6 +1524,109 @@ class _GameScreenState extends State<GameScreen>
                 _ghostButton(Icons.close_rounded, 'Pes Et', _quit),
                 const SizedBox(width: 10),
                 _ghostButton(Icons.refresh_rounded, 'Yeniden Oyna', _retry),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Sonsuz mod bitti: puan, rekor, inen sıra, kazanılacak altın.
+  Widget _endlessOver() {
+    final record = game.score > Progress.endlessBest;
+    final coins = min(100, game.score ~/ 200);
+    Widget stat(IconData icon, Color color, String label, String value) =>
+        Row(
+          children: [
+            Icon(icon, color: color, size: 22),
+            const SizedBox(width: 8),
+            Expanded(child: Text(label, style: outfit(15))),
+            Text(value, style: outfit(18, w: FontWeight.w900, color: color)),
+          ],
+        );
+    return _Backdrop(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _Ribbon(
+            text: record ? 'YENİ REKOR!' : 'OYUN BİTTİ',
+            colors:
+                record
+                    ? const [Color(0xFFFFE07A), LP.gold]
+                    : const [Color(0xFFD6A6FF), Color(0xFFA25CFF)],
+            ledge: record ? const Color(0xFF8A5A00) : const Color(0xFF4A2380),
+            textColor: record ? const Color(0xFF3D2400) : Colors.white,
+          ),
+          const SizedBox(height: 16),
+          Text('PUANIN', style: outfit(13, color: LP.muted, spacing: 1.5)),
+          FittedBox(
+            child: Text(
+              formatNum(game.score),
+              style: outfit(
+                48,
+                w: FontWeight.w900,
+                color: LP.gold,
+                shadows: embossShadow,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: LP.bgDeep.withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(26),
+            ),
+            child: Column(
+              children: [
+                stat(
+                  Icons.emoji_events_rounded,
+                  LP.gold,
+                  'Rekorun',
+                  formatNum(max(Progress.endlessBest, game.score)),
+                ),
+                const SizedBox(height: 10),
+                stat(
+                  Icons.vertical_align_bottom_rounded,
+                  LP.cyan,
+                  'İnen sıra',
+                  '${game.rowsAdded}',
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    const CoinIcon(size: 22),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text('Kazanılan altın', style: outfit(15))),
+                    Text(
+                      '+$coins',
+                      style: outfit(18, w: FontWeight.w900, color: LP.gold),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          if (!_adContinueUsed) ...[
+            const SizedBox(height: 12),
+            AdButton(
+              label: 'ÜCRETSİZ KURTAR',
+              onEarned: () {
+                setState(() => _adContinueUsed = true);
+                game.rescue();
+              },
+            ),
+          ],
+          const SizedBox(height: 12),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _ghostButton(Icons.close_rounded, 'Çık', _quit),
+                const SizedBox(width: 10),
+                _ghostButton(Icons.refresh_rounded, 'Tekrar Oyna', _retry),
               ],
             ),
           ),

@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'dart:ui';
 
 import 'package:balon_patlat/game.dart';
@@ -103,6 +104,36 @@ void main() {
       g.update(1 / 60);
     }
     expect(g.state, GameState.won);
+  });
+
+  test('sonsuz mod: hamle bitmez, sıralar iner, ekran temizlenince dolar', () {
+    final g = BubbleGame(LevelConfig.endlessMode(42))
+      ..layout(const Size(392, 640));
+    expect(g.cfg.endless, isTrue);
+    for (var i = 0; i < 12 && g.state == GameState.playing; i++) {
+      g.aimAngle = -pi / 2 + (i.isEven ? 0.3 : -0.3);
+      g.fire();
+      for (var k = 0; k < 400 && g.ballPos != null; k++) {
+        g.update(1 / 60);
+      }
+    }
+    expect(g.movesLeft, 1, reason: 'sonsuz modda hamle azalmaz');
+    expect(g.rowsAdded, greaterThanOrEqualTo(2), reason: '6 atışta bir sıra');
+    expect(g.state, isNot(GameState.lostMoves));
+    // ekranı boşalt: yeni sıralar gelmeli, bölüm kazanılmamalı
+    g.grid = [for (final row in g.grid) List<int?>.filled(row.length, null)];
+    g.grid[0][0] = 1;
+    g.grid[0][1] = 1;
+    g.current = 1;
+    g.aimAngle = g.bestAim()!;
+    final before = g.score;
+    g.fire();
+    for (var k = 0; k < 400 && g.ballPos != null; k++) {
+      g.update(1 / 60);
+    }
+    expect(g.state, GameState.playing);
+    expect(g.bubbleCount, greaterThan(0));
+    expect(g.score, greaterThanOrEqualTo(before + 1000));
   });
 
   test('ipucu patlatan bir açı bulur', () {

@@ -94,13 +94,28 @@ class LevelConfig {
   /// Dizilim tohumu; null ise bölüm numarasından türetilir. Günlük meydan
   /// okuma her gün farklı bir dizilim için kendi tohumunu verir.
   final int? seed;
+
+  /// Sonsuz mod: hamle sınırı yok, sıralar sürekli iner, en yüksek puan.
+  final bool endless;
   const LevelConfig(
     this.level,
     this.rows,
     this.colors,
     this.shotsPerRow, {
     this.seed,
+    this.endless = false,
   });
+
+  /// Sonsuz mod başlangıcı: orta zorlukta (30. bölüm benzeri) bir ızgara,
+  /// her oyunda farklı dizilim.
+  factory LevelConfig.endlessMode([int? seed]) => LevelConfig(
+    30,
+    8,
+    5,
+    6,
+    seed: seed ?? DateTime.now().millisecondsSinceEpoch & 0x7fffffff,
+    endless: true,
+  );
 
   /// Günün meydan okuması: oyuncunun seviyesine yakın zorlukta, her gün
   /// değişen ama herkes için aynı dizilim.
@@ -283,7 +298,19 @@ class BubbleGame {
   final Map<int, int> _shotColors = {};
 
   double get speed => width * cfg.speedFactor;
-  int get shotsUntilRow => cfg.shotsPerRow - missCount;
+  int get shotsUntilRow => rowEvery - missCount;
+
+  /// Sonsuz modda inen sıra sayısı (puan tablosunda da gösterilir).
+  int rowsAdded = 0;
+
+  /// Kaç atışta bir yeni sıra iner. Sonsuz modda her atış sayılır ve
+  /// sıralar indikçe hızlanır (6 → 3).
+  int get rowEvery =>
+      cfg.endless ? max(3, 6 - rowsAdded ~/ 10) : cfg.shotsPerRow;
+
+  /// Sonsuz modda o an kullanılan renk sayısı (5'ten 6'ya çıkar).
+  int get colorsNow =>
+      cfg.endless ? min(6, 5 + rowsAdded ~/ 20) : cfg.colors;
 
   /// Atıcı bölgesinin ölçeği (halka, sıradaki balon, takas): toplar
   /// küçülse de parmakla rahat kullanılsın diye eski boyutta kalır.
@@ -423,6 +450,7 @@ class BubbleGame {
         movesFor(initialCount, cfg) +
         (stoneCount * 0.12).ceil() +
         (ice * 0.5 + virus * 0.5 + cham * 0.25).ceil();
+    if (cfg.endless) totalMoves = 1; // hamle sınırı yok
     movesLeft = totalMoves;
     current = pickColor();
     next = pickColor();
@@ -446,6 +474,7 @@ class BubbleGame {
     goldPopped = 0;
     iceBroken = 0;
     virusKilled = 0;
+    rowsAdded = 0;
     hintAngle = null;
     fever = 0;
     superShots = 0;
@@ -477,7 +506,8 @@ class BubbleGame {
       ..movesLeft = movesLeft
       ..totalMoves = totalMoves
       ..initialCount = initialCount
-      ..missCount = missCount;
+      ..missCount = missCount
+      ..rowsAdded = rowsAdded;
   }
 
   /// İpucu: sıradaki topla en çok balon eksilten nişan açısını bulur
@@ -489,8 +519,8 @@ class BubbleGame {
     for (var i = 0; i <= samples; i++) {
       final a = -pi + 0.2 + (pi - 0.4) * i / samples;
       final s = clone()..movesLeft = 999;
-      final before = s.bubbleCount;
-      final ice = s.iceLeft;
+      var gained = 0;
+      s.onShot = (p, d, _, _) => gained = p + d;
       s.aimAngle = a;
       s.fire();
       for (var k = 0; k < 400 && s.ballPos != null; k++) {
@@ -500,9 +530,7 @@ class BubbleGame {
       // patlayan/düşen balonlar + kırılan buzlar (yarım puan);
       // ortaya yakın açılar eşitlikte tercih edilir
       final val =
-          (before - s.bubbleCount) +
-          (ice - s.iceLeft) * 0.5 -
-          (a + pi / 2).abs() * 0.01;
+          gained + s.iceBroken * 0.5 - (a + pi / 2).abs() * 0.01;
       if (val > bestVal) {
         bestVal = val;
         best = a;
@@ -625,7 +653,7 @@ class BubbleGame {
       current = next;
       next = pickColor();
     }
-    movesLeft--;
+    if (!cfg.endless) movesLeft--;
     onSfx?.call(switch (ballKind) {
       ShotKind.fire => 'fire',
       ShotKind.rainbow => 'rainbow',
@@ -1040,13 +1068,22 @@ class BubbleGame {
       onSfx?.call('stick');
       if (cracked == 0) _spreadVirus();
       // buz kırmak da işe yarar bir atıştır: yeni sıra sayacını ilerletmez
-      if (cracked == 0 && cfg.shotsPerRow > 0) {
+      if (!cfg.endless && cracked == 0 && cfg.shotsPerRow > 0) {
         missCount++;
         if (missCount >= cfg.shotsPerRow) {
           missCount = 0;
           onSfx?.call('row');
           _addRow();
         }
+      }
+    }
+    // sonsuz mod: her atış sayılır, belli aralıkla yeni sıra iner
+    if (cfg.endless) {
+      missCount++;
+      if (missCount >= rowEvery) {
+        missCount = 0;
+        onSfx?.call('row');
+        _addRow();
       }
     }
     _shiftChameleons();
@@ -1069,6 +1106,18 @@ class BubbleGame {
           }
         }
       }
+    }
+    if (bubbleCount == 0 && cfg.endless) {
+      // sonsuz mod: ekran temizlendi → büyük bonus ve yeni sıralar
+      score += 1000;
+      praise = 'EKRAN TEMİZ! +1000';
+      praiseT = 1.6;
+      shake = max(shake, 0.3);
+      for (var i = 0; i < 4; i++) {
+        _addRow();
+      }
+      onSfx?.call('row');
+      return;
     }
     if (bubbleCount == 0) {
       // kalan taşlar ve bombalar ufalanıp düşer
@@ -1125,7 +1174,23 @@ class BubbleGame {
       row[c] =
           present.isNotEmpty && rnd.nextDouble() < 0.7
               ? present[rnd.nextInt(present.length)]
-              : rnd.nextInt(cfg.colors);
+              : rnd.nextInt(colorsNow);
+      if (cfg.endless) row[c] = _endlessSpecial(row[c]!);
     }
+    if (cfg.endless) rowsAdded++;
+  }
+
+  /// Sonsuz modda inen sıralara karışan özel balonlar; sıralar indikçe
+  /// daha zorlu olanlar da gelir.
+  int _endlessSpecial(int color) {
+    final x = rnd.nextDouble();
+    final n = rowsAdded;
+    if (x < 0.03) return bombCell;
+    if (x < 0.06) return goldCell;
+    if (n >= 8 && x < 0.10) return iceBase + color;
+    if (n >= 16 && x < 0.12) return virusCell;
+    if (n >= 24 && x < 0.15) return chamBase + color;
+    if (n >= 12 && x < 0.17) return stone;
+    return color;
   }
 }

@@ -9,7 +9,7 @@ import 'cloud/ui_common.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
-const appVersion = '1.11.0';
+const appVersion = '1.12.0';
 
 Future<void> showSettings(BuildContext context) =>
     showDialog(context: context, builder: (_) => const _SettingsDialog());

@@ -154,6 +154,29 @@ void main() {
     expect(find.text('Gökkuşağı'), findsOneWidget);
   });
 
+  testWidgets('sonsuz mod ekranı ve oyun sonu taşmadan çizilir', (t) async {
+    await phone(t);
+    await t.pumpWidget(
+      const MaterialApp(home: GameScreen(level: 20, endless: true)),
+    );
+    await t.pump(const Duration(milliseconds: 100));
+    expect(find.text('SONSUZ'), findsOneWidget);
+    expect(find.text('SIRA'), findsOneWidget);
+    final state = t.state(find.byType(GameScreen)) as dynamic;
+    final BubbleGame g = state.game;
+    g.score = 12345;
+    g.state = GameState.lostDanger;
+    await t.pump(const Duration(milliseconds: 50));
+    expect(find.text('YENİ REKOR!'), findsOneWidget);
+    expect(find.text('+61'), findsOneWidget);
+    await t.tap(find.text('Tekrar Oyna'));
+    await t.pump(const Duration(milliseconds: 50));
+    expect(Progress.endlessBest, 12345);
+    expect(Progress.endlessGames, 1);
+    expect(g.state, GameState.playing);
+    await t.pump(const Duration(seconds: 3)); // tanıtım zamanlayıcısı
+  });
+
   testWidgets('kazanma ve kaybetme ekranları taşmadan çizilir', (t) async {
     await phone(t);
     await t.pumpWidget(const MaterialApp(home: GameScreen(level: 3)));

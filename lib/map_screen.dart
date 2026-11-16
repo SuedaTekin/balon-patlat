@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'cloud/cloud.dart';
 import 'cloud/leaderboard_tab.dart';
+import 'cloud/ui_common.dart';
 import 'game.dart';
 import 'level_intro.dart';
 import 'audio.dart';
@@ -158,6 +159,7 @@ class _MapTabState extends State<MapTab> {
       children: [
         _regionCard(region),
         if (Progress.dailyAvailable && Progress.unlocked >= 5) _dailyCard(),
+        _endlessCard(),
         Expanded(
           child: LayoutBuilder(
             builder: (context, c) {
@@ -394,6 +396,84 @@ class _MapTabState extends State<MapTab> {
                 style: outfit(14, color: const Color(0xFF5A1F8C)),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Sonsuz mod kartı: 10. bölümde açılır; rekoru gösterir.
+  Widget _endlessCard() {
+    final open = Progress.unlocked >= Progress.endlessUnlock;
+    return GestureDetector(
+      onTap: () async {
+        if (!open) {
+          toast(
+            context,
+            'Sonsuz Mod ${Progress.endlessUnlock}. bölümde açılır!',
+          );
+          return;
+        }
+        await startEndless(context);
+        if (mounted) setState(() {});
+      },
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 4, 16, 2),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(22),
+          gradient: LinearGradient(
+            colors:
+                open
+                    ? const [Color(0xFF2A1F72), Color(0xFF00A6C2)]
+                    : [LP.surfaceHigh, LP.surfaceHigh],
+          ),
+          border: Border.all(
+            color: open ? const Color(0xFF8CF5FF) : LP.surfaceHighest,
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              open ? Icons.all_inclusive_rounded : Icons.lock_rounded,
+              color: open ? const Color(0xFF8CF5FF) : LP.muted,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'SONSUZ MOD',
+                    style: outfit(15, w: FontWeight.w900, color: Colors.white),
+                  ),
+                  Text(
+                    !open
+                        ? '${Progress.endlessUnlock}. bölümde açılır'
+                        : Progress.endlessBest > 0
+                        ? 'Rekorun: ${formatNum(Progress.endlessBest)} · can harcamaz'
+                        : 'Hamle sınırı yok · can harcamaz · altın kazan',
+                    style: jakarta(11, color: Colors.white70),
+                  ),
+                ],
+              ),
+            ),
+            if (open)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF8CF5FF),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  'OYNA',
+                  style: outfit(14, color: const Color(0xFF002A33)),
+                ),
+              ),
           ],
         ),
       ),

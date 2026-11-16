@@ -76,6 +76,24 @@ class Progress {
   static int winStreak = 0;
   static int get streakTier => min(3, winStreak);
 
+  /// Sonsuz mod rekoru ve oyun sayısı.
+  static int endlessBest = 0, endlessGames = 0;
+
+  /// Sonsuz mod açılış bölümü.
+  static const endlessUnlock = 10;
+
+  /// Sonsuz mod oyununu kaydeder; kazanılan altını döner (puan/200, en çok
+  /// 100) ve yeni rekorsa [endlessBest] güncellenir.
+  static int recordEndless(int score) {
+    endlessGames++;
+    if (score > endlessBest) endlessBest = score;
+    final coinsWon = min(100, score ~/ 200);
+    coins += coinsWon;
+    addStat('endless');
+    save();
+    return coinsWon;
+  }
+
   /// Günün meydan okumasının en son bitirildiği gün ve açılan bölge sandıkları.
   static String dailyDoneDay = '';
   static final Set<int> regionChests = {};
@@ -199,6 +217,8 @@ class Progress {
     'passXp': passXp,
     'passGold': passGold,
     'winStreak': winStreak,
+    'endlessBest': endlessBest,
+    'endlessGames': endlessGames,
     'skin': skin,
     'ownedSkins': ownedSkins.toList(),
     'dealDay': dealDay,
@@ -255,6 +275,8 @@ class Progress {
     weeklyStars = i('weeklyStars', 0);
     welcomeGiven = j['welcomeGiven'] as bool? ?? false;
     winStreak = i('winStreak', 0);
+    endlessBest = i('endlessBest', 0);
+    endlessGames = i('endlessGames', 0);
     skin = j['skin'] as String? ?? 'altin';
     ownedSkins
       ..clear()

@@ -63,6 +63,15 @@ Future<void> startDaily(BuildContext context) async {
   );
 }
 
+/// Sonsuz modu başlatır (can harcamaz).
+Future<void> startEndless(BuildContext context) async {
+  await Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => GameScreen(level: Progress.unlocked, endless: true),
+    ),
+  );
+}
+
 class _LevelIntro extends StatefulWidget {
   const _LevelIntro({required this.level});
   final int level;
