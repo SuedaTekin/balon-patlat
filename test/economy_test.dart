@@ -201,6 +201,21 @@ void main() {
     expect(Progress.winStreak, 4);
   });
 
+  test('atıcı temaları ve günün fırsatı kayda yazılır', () {
+    expect(Progress.skin, 'altin');
+    expect(Progress.ownedSkins, contains('altin'));
+    Progress.ownedSkins.add('neon');
+    Progress.skin = 'neon';
+    Progress.dealDay = todayKey;
+    final j = Progress.toJson();
+    Progress.resetLocal();
+    expect(Progress.skin, 'altin');
+    Progress.fromJson(j);
+    expect(Progress.skin, 'neon');
+    expect(Progress.ownedSkins, containsAll(['altin', 'neon']));
+    expect(Progress.dealDay, todayKey);
+  });
+
   test('kayıt yeniden yüklenince korunur', () async {
     Progress.coins = 1234;
     Progress.lives = 2;

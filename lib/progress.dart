@@ -66,6 +66,11 @@ class Progress {
   static final Map<String, int> stats = {};
   static final Set<String> claimedQuests = {};
 
+  /// Atıcı temaları (kozmetik) ve günün fırsatının alındığı gün.
+  static String skin = 'altin';
+  static final Set<String> ownedSkins = {'altin'};
+  static String dealDay = '';
+
   /// Kazanma serisi: art arda kazanılan bölüm sayısı. Kaybedince sıfırlanır.
   /// 1: +3 hamle, 2: + Gökkuşağı, 3+: + Bomba (bölüm başında ücretsiz).
   static int winStreak = 0;
@@ -194,6 +199,9 @@ class Progress {
     'passXp': passXp,
     'passGold': passGold,
     'winStreak': winStreak,
+    'skin': skin,
+    'ownedSkins': ownedSkins.toList(),
+    'dealDay': dealDay,
     'dailyDoneDay': dailyDoneDay,
     'regionChests': regionChests.toList(),
     'lifetime': Map.of(lifetime),
@@ -247,6 +255,12 @@ class Progress {
     weeklyStars = i('weeklyStars', 0);
     welcomeGiven = j['welcomeGiven'] as bool? ?? false;
     winStreak = i('winStreak', 0);
+    skin = j['skin'] as String? ?? 'altin';
+    ownedSkins
+      ..clear()
+      ..add('altin')
+      ..addAll([for (final x in (j['ownedSkins'] as List? ?? [])) '$x']);
+    dealDay = s('dealDay');
     dailyDoneDay = s('dailyDoneDay');
     regionChests
       ..clear()

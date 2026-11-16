@@ -5,6 +5,8 @@ import 'audio.dart';
 import 'billing.dart';
 import 'game.dart';
 import 'progress.dart';
+import 'level_intro.dart';
+import 'skins.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -65,6 +67,8 @@ class _ShopTabState extends State<ShopTab> {
         _freeGift(),
         const SizedBox(height: 12),
         _adCoins(),
+        const SizedBox(height: 12),
+        _dailyDeal(),
         const SizedBox(height: 20),
         _title(Icons.monetization_on_rounded, 'Altın Paketleri', LP.gold),
         for (final p in coinPacks) ...[
@@ -91,6 +95,21 @@ class _ShopTabState extends State<ShopTab> {
           crossAxisSpacing: 12,
           childAspectRatio: 0.92,
           children: [for (final b in Booster.values) _boosterCard(b)],
+        ),
+        const SizedBox(height: 20),
+        _title(
+          Icons.palette_rounded,
+          'Atıcı Temaları',
+          const Color(0xFFB45CFF),
+        ),
+        GridView.count(
+          crossAxisCount: 3,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
+          childAspectRatio: 0.72,
+          children: [for (final s in launcherSkins) _skinCard(s)],
         ),
         const SizedBox(height: 20),
         if (!Billing.live)
@@ -254,6 +273,201 @@ class _ShopTabState extends State<ShopTab> {
           ),
         ),
       ],
+    );
+  }
+
+  /// Günün fırsatı: her gün değişen indirimli güçlendirici paketi.
+  static const _deals = [
+    ('Ateş + Lazer Paketi', {Booster.fire: 3, Booster.laser: 3}, 1100, 700),
+    ('Gökkuşağı Paketi', {Booster.rainbow: 4}, 900, 550),
+    ('Hamle Paketi', {Booster.moves: 4}, 800, 500),
+    (
+      'Karışık Paket',
+      {Booster.rainbow: 1, Booster.fire: 1, Booster.laser: 1, Booster.moves: 1},
+      800,
+      450,
+    ),
+  ];
+
+  Widget _dailyDeal() {
+    final day = DateTime.now().difference(DateTime(2026)).inDays;
+    final (name, boosters, oldPrice, price) = _deals[day % _deals.length];
+    final bought = Progress.dealDay == todayKey;
+    final can = !bought && Progress.coins >= price;
+    final now = DateTime.now();
+    final left = DateTime(now.year, now.month, now.day + 1).difference(now);
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: glassCard(border: LP.pink.withValues(alpha: 0.7)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 3,
+                ),
+                decoration: BoxDecoration(
+                  color: LP.pink,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  'GÜNÜN FIRSATI',
+                  style: outfit(12, color: Colors.white),
+                ),
+              ),
+              const Spacer(),
+              const Icon(Icons.timer_outlined, size: 14, color: LP.muted),
+              Text(
+                ' ${left.inHours}s ${left.inMinutes % 60}dk',
+                style: outfit(12, color: LP.muted),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(name, style: outfit(18, w: FontWeight.w900)),
+          const SizedBox(height: 6),
+          RewardChips(Reward(boosters: boosters)),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Text(
+                formatNum(oldPrice),
+                style: outfit(
+                  15,
+                  color: LP.muted,
+                ).copyWith(decoration: TextDecoration.lineThrough),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: LP.surfaceHighest,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '%${((1 - price / oldPrice) * 100).round()} İNDİRİM',
+                  style: outfit(11, color: LP.gold),
+                ),
+              ),
+              const Spacer(),
+              SizedBox(
+                width: 120,
+                child: JuicyButton.gold(
+                  height: 46,
+                  padding: EdgeInsets.zero,
+                  onTap:
+                      can
+                          ? () async {
+                            Progress.spend(price);
+                            Progress.grant(Reward(boosters: boosters));
+                            Progress.dealDay = todayKey;
+                            Progress.save();
+                            _done();
+                            await showRewardDialog(
+                              context,
+                              'FIRSAT SENİN!',
+                              Reward(boosters: boosters),
+                            );
+                          }
+                          : null,
+                  child: FittedBox(
+                    child:
+                        bought
+                            ? Text(
+                              'ALINDI',
+                              style: outfit(
+                                16,
+                                w: FontWeight.w900,
+                                color: const Color(0xFF3D2400),
+                              ),
+                            )
+                            : Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const CoinIcon(size: 20),
+                                Text(
+                                  ' ${formatNum(price)}',
+                                  style: outfit(
+                                    16,
+                                    w: FontWeight.w900,
+                                    color: const Color(0xFF3D2400),
+                                  ),
+                                ),
+                              ],
+                            ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _skinCard(LauncherSkin s) {
+    final owned = Progress.ownedSkins.contains(s.id);
+    final selected = Progress.skin == s.id;
+    final can = !owned && Progress.coins >= s.price;
+    return GestureDetector(
+      onTap: () async {
+        if (owned) {
+          Progress.skin = s.id;
+          Progress.save();
+          _done();
+          return;
+        }
+        if (!can) {
+          toastPrice(context);
+          return;
+        }
+        Progress.spend(s.price);
+        Progress.ownedSkins.add(s.id);
+        Progress.skin = s.id;
+        Progress.save();
+        _done();
+        Sfx.play('tier');
+      },
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: glassCard(
+          border: selected ? const Color(0xFFB45CFF) : null,
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            SkinPreview(s, size: 62),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(s.name, style: outfit(14, w: FontWeight.w900)),
+            ),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child:
+                  selected
+                      ? Text(
+                        'SEÇİLİ',
+                        style: outfit(12, color: const Color(0xFFB45CFF)),
+                      )
+                      : owned
+                      ? Text('SEÇ', style: outfit(12, color: LP.cyan))
+                      : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const CoinIcon(size: 14),
+                          Text(
+                            ' ${formatNum(s.price)}',
+                            style: outfit(12, color: can ? LP.gold : LP.muted),
+                          ),
+                        ],
+                      ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

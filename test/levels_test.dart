@@ -73,6 +73,21 @@ void main() {
     expect(isColor(goldCell), isFalse);
   });
 
+  test('süper atış: gösterge dolunca sıradaki atış bomba olur', () {
+    final g = BubbleGame(LevelConfig.forLevel(20))
+      ..layout(const Size(392, 640));
+    expect(g.superReady, isFalse);
+    expect(g.loadedKind, ShotKind.normal);
+    g.fever = 1;
+    expect(g.superReady, isTrue);
+    expect(g.loadedKind, ShotKind.bomb);
+    final color = g.current;
+    expect(g.fire(), ShotKind.bomb);
+    expect(g.fever, 0);
+    expect(g.superShots, 1);
+    expect(g.current, color); // bomba renkli topu harcamaz
+  });
+
   test('günlük meydan okuma: gün aynıysa aynı dizilim, farklıysa farklı', () {
     List<List<int?>> grid(String day) =>
         (BubbleGame(LevelConfig.daily(40, day))

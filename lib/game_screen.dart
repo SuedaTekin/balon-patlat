@@ -8,6 +8,7 @@ import 'game.dart';
 import 'level_intro.dart';
 import 'progress.dart';
 import 'settings.dart';
+import 'skins.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -2119,7 +2120,7 @@ class GamePainter extends CustomPainter {
 
     // nişan çizgisi
     if (g.aiming && g.ballPos == null && g.state == GameState.playing) {
-      final color = switch (g.armed) {
+      final color = switch (g.loadedKind) {
         ShotKind.fire => const Color(0xFFFF7A1A),
         ShotKind.rainbow => Colors.white,
         ShotKind.laser => LP.cyan,
@@ -2139,16 +2140,16 @@ class GamePainter extends CustomPainter {
           // en fazla 2 sekme gösterilir; ekran noktalarla dolmasın
           if (++bounces > 2) break;
         }
-        if (pos.dy < r || (g.armed != ShotKind.fire && _near(pos))) {
+        if (pos.dy < r || (g.loadedKind != ShotKind.fire && _near(pos))) {
           // hedef: balonun oturacağı yerde hayalet balon
-          if (g.armed == ShotKind.normal ||
-              g.armed == ShotKind.rainbow ||
-              g.armed == ShotKind.bomb) {
+          if (g.loadedKind == ShotKind.normal ||
+              g.loadedKind == ShotKind.rainbow ||
+              g.loadedKind == ShotKind.bomb) {
             final cell = g.landingCell(Offset(pos.dx, max(pos.dy, r)));
             if (cell != null) {
               final at = g.cellCenter(cell.$1, cell.$2);
               final pulse = 0.5 + 0.5 * sin(g.time * 6);
-              if (g.armed == ShotKind.bomb) {
+              if (g.loadedKind == ShotKind.bomb) {
                 // patlama alanı önizlemesi
                 for (final (a, b) in g.blastArea(cell.$1, cell.$2)) {
                   if (g.grid[a][b] != null) {
@@ -2199,7 +2200,7 @@ class GamePainter extends CustomPainter {
     canvas.drawOval(
       base.inflate(u * 0.4),
       Paint()
-        ..color = LP.cyan.withValues(alpha: 0.10)
+        ..color = currentSkin.glow.withValues(alpha: 0.14)
         ..maskFilter = MaskFilter.blur(BlurStyle.normal, u * 0.6),
     );
     canvas.drawOval(
@@ -2216,7 +2217,7 @@ class GamePainter extends CustomPainter {
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = u * 0.08
-        ..color = LP.cyan.withValues(alpha: 0.45),
+        ..color = currentSkin.glow.withValues(alpha: 0.55),
     );
     canvas.drawCircle(
       s,
@@ -2229,10 +2230,60 @@ class GamePainter extends CustomPainter {
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = u * 0.2
-        ..shader = const SweepGradient(
-          colors: [LP.goldLight, LP.gold, Color(0xFFC77700), LP.goldLight],
+        ..shader = SweepGradient(
+          colors: currentSkin.ring,
         ).createShader(Rect.fromCircle(center: s, radius: u * 1.3)),
     );
+    // süper atış göstergesi: halkanın dışında dolan yay
+    final feverRect = Rect.fromCircle(center: s, radius: u * 1.62);
+    canvas.drawArc(
+      feverRect,
+      -pi / 2,
+      2 * pi,
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = u * 0.1
+        ..color = Colors.white.withValues(alpha: 0.08),
+    );
+    if (g.fever > 0) {
+      canvas.drawArc(
+        feverRect,
+        -pi / 2,
+        2 * pi * g.fever,
+        false,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = u * 0.1
+          ..strokeCap = StrokeCap.round
+          ..shader = const SweepGradient(
+            colors: [Color(0xFF00D8F5), Color(0xFFFF4E7C), Color(0xFFFFB800)],
+          ).createShader(feverRect),
+      );
+    }
+    if (g.superReady && g.state == GameState.playing) {
+      final pulse = 0.5 + 0.5 * sin(g.time * 8);
+      canvas.drawCircle(
+        s,
+        u * 1.75,
+        Paint()
+          ..color = const Color(0xFFFF4E7C).withValues(alpha: 0.25 * pulse)
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, u * 0.5),
+      );
+      final tp = TextPainter(
+        text: TextSpan(
+          text: 'SÜPER ATIŞ!',
+          style: outfit(
+            u * 0.55,
+            w: FontWeight.w900,
+            color: Colors.white,
+            shadows: const [Shadow(color: Color(0xFFFF4E7C), blurRadius: 10)],
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, s + Offset(u * 1.9, -u * 0.35 - pulse * u * 0.1));
+    }
     final tip = s + dir * u * 2.05;
     final side = Offset(-dir.dy, dir.dx);
     canvas.drawPath(
@@ -2251,7 +2302,7 @@ class GamePainter extends CustomPainter {
     );
     if (g.ballPos == null && g.state == GameState.playing) {
       // ızgaradaki toplardan biraz büyük (görünür) ama aynı ölçeğe yakın
-      drawShot(canvas, s, r * 1.3, g.armed, g.current);
+      drawShot(canvas, s, r * 1.3, g.loadedKind, g.current);
     }
     final bp = g.ballPos;
     if (bp != null) {

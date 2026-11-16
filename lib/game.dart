@@ -207,6 +207,17 @@ class BubbleGame {
   /// Bölümün kazanıldığı an (konfeti için).
   double? wonAt;
 
+  /// Süper atış göstergesi (0–1). Patlatılan/düşürülen her top doldurur;
+  /// dolunca sıradaki normal atış ücretsiz süper bomba olur.
+  double fever = 0;
+  static const feverBalls = 45;
+  int superShots = 0;
+
+  bool get superReady => fever >= 1 && armed == ShotKind.normal;
+
+  /// Atıcıda görünen atış türü (süper atış hazırsa bomba).
+  ShotKind get loadedKind => superReady ? ShotKind.bomb : armed;
+
   /// Şu an kazanılırsa alınacak yıldız (kalan hamle oranına göre).
   int get projectedStars {
     final ratio = movesLeft / max(1, totalMoves);
@@ -350,6 +361,8 @@ class BubbleGame {
     impactPos = null;
     shake = 0;
     goldPopped = 0;
+    fever = 0;
+    superShots = 0;
     praise = null;
     wonAt = null;
     _generate();
@@ -477,7 +490,12 @@ class BubbleGame {
 
   ShotKind? fire() {
     if (ballPos != null || state != GameState.playing) return null;
-    ballKind = armed;
+    ballKind = loadedKind;
+    if (superReady) {
+      fever = 0;
+      superShots++;
+      onSfx?.call('combo');
+    }
     armed = ShotKind.normal;
     _firePopped = 0;
     _shotColors.clear();
@@ -810,6 +828,10 @@ class BubbleGame {
       onSfx?.call('pop');
       if (dropped > 0) onSfx?.call('drop');
       final total = popped + dropped;
+      // süper atış göstergesi (süper bombanın kendisi doldurmaz)
+      if (ballKind != ShotKind.bomb || fever > 0) {
+        fever = min(1, fever + total / feverBalls);
+      }
       final p =
           total >= 18
               ? 'EFSANE!'

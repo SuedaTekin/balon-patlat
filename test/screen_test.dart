@@ -40,7 +40,19 @@ void main() {
 
     await t.tap(find.text('Mağaza'));
     await t.pump();
-    expect(find.text('Altın Paketleri'), findsOneWidget);
+    expect(find.text('GÜNÜN FIRSATI'), findsOneWidget);
+    await t.scrollUntilVisible(
+      find.text('Altın Paketleri'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await t.scrollUntilVisible(
+      find.text('Galaksi'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Atıcı Temaları'), findsOneWidget);
+    expect(find.text('Galaksi'), findsOneWidget);
 
     await t.tap(find.text('Takım'));
     await t.pump();
