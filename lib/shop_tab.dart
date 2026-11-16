@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 
 import 'ads.dart';
@@ -64,6 +66,9 @@ class _ShopTabState extends State<ShopTab> {
           _starterCard(),
           const SizedBox(height: 20),
         ],
+        _piggyCard(),
+        const SizedBox(height: 12),
+        if (!Progress.noAds) ...[_noAdsCard(), const SizedBox(height: 12)],
         _freeGift(),
         const SizedBox(height: 12),
         _adCoins(),
@@ -128,6 +133,176 @@ class _ShopTabState extends State<ShopTab> {
             ],
           ),
       ],
+    );
+  }
+
+  /// Kumbara: her galibiyette altın birikir; satın alınca hepsi senin.
+  Widget _piggyCard() {
+    final p = Progress.piggy;
+    final ready = Progress.piggyReady;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(26),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFFF8FB8), Color(0xFFE0457B)],
+        ),
+        boxShadow: const [
+          BoxShadow(color: Color(0xFF8C1F48), offset: Offset(0, 5)),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white.withValues(alpha: 0.25),
+            ),
+            child: const Icon(
+              Icons.savings_rounded,
+              color: Colors.white,
+              size: 42,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  Progress.piggyFull ? 'KUMBARA DOLU!' : 'KUMBARA',
+                  style: outfit(18, w: FontWeight.w900, color: Colors.white),
+                ),
+                Text(
+                  ready
+                      ? 'Her galibiyette dolar. Kır, hepsi senin!'
+                      : 'Bölüm kazandıkça altın birikir '
+                          '(en az ${Progress.piggyMin})',
+                  style: jakarta(11, color: Colors.white),
+                ),
+                const SizedBox(height: 6),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(999),
+                  child: Container(
+                    height: 14,
+                    color: const Color(0x55000000),
+                    alignment: Alignment.centerLeft,
+                    child: FractionallySizedBox(
+                      widthFactor: max(0.03, p / Progress.piggyMax),
+                      child: Container(color: LP.gold),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const CoinIcon(size: 16),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${formatNum(p)} / ${formatNum(Progress.piggyMax)}',
+                      style: outfit(13, color: Colors.white),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 92,
+            child: Opacity(
+              opacity: ready ? 1 : 0.5,
+              child: JuicyButton.gold(
+                height: 44,
+                padding: EdgeInsets.zero,
+                onTap: () async {
+                  if (!ready) {
+                    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Kumbarada en az ${Progress.piggyMin} altın birikmeli.',
+                        ),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                    return;
+                  }
+                  final n = Progress.piggy;
+                  if (!await Billing.buy(context, 'piggy_bank')) return;
+                  _done();
+                  Sfx.play('coin');
+                  if (mounted) {
+                    await showRewardDialog(
+                      context,
+                      'KUMBARA KIRILDI!',
+                      Reward(coins: n),
+                    );
+                  }
+                },
+                child: FittedBox(
+                  child: MoneyText(
+                    Billing.price('piggy_bank'),
+                    style: outfit(
+                      16,
+                      w: FontWeight.w900,
+                      color: const Color(0xFF3D2400),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Reklamları kaldır (tek seferlik) + 1.000 altın hediye.
+  Widget _noAdsCard() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: glassCard(),
+      child: Row(
+        children: [
+          const Icon(Icons.block_rounded, color: LP.cyan, size: 40),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Reklamları Kaldır', style: outfit(17, w: FontWeight.w900)),
+                Text(
+                  'Bölüm arası reklamlar bir daha çıkmaz · +1.000 altın hediye',
+                  style: jakarta(11, color: LP.muted),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 92,
+            child: JuicyButton.cyan(
+              height: 44,
+              padding: EdgeInsets.zero,
+              onTap: () => _buyReal('no_ads'),
+              child: FittedBox(
+                child: MoneyText(
+                  Billing.price('no_ads'),
+                  style: outfit(
+                    16,
+                    w: FontWeight.w900,
+                    color: const Color(0xFF00363D),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

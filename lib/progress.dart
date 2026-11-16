@@ -217,6 +217,9 @@ class Progress {
     'passXp': passXp,
     'passGold': passGold,
     'winStreak': winStreak,
+    'piggy': piggy,
+    'noAds': noAds,
+    'winsSinceAd': winsSinceAd,
     'endlessBest': endlessBest,
     'endlessGames': endlessGames,
     'skin': skin,
@@ -275,6 +278,9 @@ class Progress {
     weeklyStars = i('weeklyStars', 0);
     welcomeGiven = j['welcomeGiven'] as bool? ?? false;
     winStreak = i('winStreak', 0);
+    piggy = i('piggy', 0);
+    noAds = j['noAds'] as bool? ?? false;
+    winsSinceAd = i('winsSinceAd', 0);
     endlessBest = i('endlessBest', 0);
     endlessGames = i('endlessGames', 0);
     skin = j['skin'] as String? ?? 'altin';
@@ -454,9 +460,43 @@ class Progress {
     // bilet XP: galibiyet 10 + yıldız başına 10
     addPassXp(10 + starCount * 10);
     winStreak++;
+    lastPiggyGain = addPiggy(25 + starCount * 10);
+    winsSinceAd++;
     save();
     return reward;
   }
+
+  // ---------------- kumbara ----------------
+  /// Kumbara: her galibiyette altın birikir, satın alınca hepsi verilir.
+  static int piggy = 0;
+  static const piggyMax = 3000, piggyMin = 500;
+  static int lastPiggyGain = 0;
+  static bool get piggyFull => piggy >= piggyMax;
+  static bool get piggyReady => piggy >= piggyMin;
+
+  /// Kumbaraya ekler (dolunca durur); eklenen miktarı döner.
+  static int addPiggy(int n) {
+    final add = max(0, min(n, piggyMax - piggy));
+    piggy += add;
+    return add;
+  }
+
+  /// Kumbara kırıldı (satın alındı): biriken altın verilir.
+  static int breakPiggy() {
+    final n = piggy;
+    coins += n;
+    piggy = 0;
+    addStat('piggy');
+    save();
+    return n;
+  }
+
+  // ---------------- reklamlar ----------------
+  /// "Reklamları Kaldır" satın alındı mı? (geçiş reklamları gösterilmez)
+  static bool noAds = false;
+
+  /// Son geçiş reklamından beri kazanılan bölüm sayısı.
+  static int winsSinceAd = 0;
 
   static int get totalStars => stars.values.fold(0, (a, b) => a + b);
   static int get totalScore => bestScores.values.fold(0, (a, b) => a + b);

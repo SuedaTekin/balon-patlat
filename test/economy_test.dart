@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:balon_patlat/achievements.dart';
+import 'package:balon_patlat/ads.dart';
 import 'package:balon_patlat/events_tab.dart';
 import 'package:balon_patlat/game.dart';
 import 'package:balon_patlat/progress.dart';
@@ -14,6 +15,47 @@ void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
     await Progress.load();
+  });
+
+  test('kumbara galibiyetlerle dolar, sınırda durur, kırınca altın verir', () {
+    expect(Progress.piggy, 0);
+    Progress.recordWin(1, 3, 1000);
+    expect(Progress.piggy, 55); // 25 + 3 yıldız × 10
+    expect(Progress.lastPiggyGain, 55);
+    expect(Progress.piggyReady, isFalse);
+    Progress.piggy = Progress.piggyMax - 10;
+    Progress.recordWin(2, 1, 100);
+    expect(Progress.piggy, Progress.piggyMax);
+    expect(Progress.lastPiggyGain, 10);
+    expect(Progress.piggyFull, isTrue);
+    final before = Progress.coins;
+    expect(Progress.breakPiggy(), Progress.piggyMax);
+    expect(Progress.coins, before + Progress.piggyMax);
+    expect(Progress.piggy, 0);
+    // kayıttan geri yüklenir
+    Progress.piggy = 700;
+    Progress.noAds = true;
+    final j = Progress.toJson();
+    Progress.fromJson({});
+    expect(Progress.piggy, 0);
+    Progress.fromJson(j);
+    expect(Progress.piggy, 700);
+    expect(Progress.noAds, isTrue);
+    Progress.noAds = false;
+  });
+
+  test('geçiş reklamı kuralları', () {
+    final t = DateTime.now();
+    Progress.noAds = false;
+    Progress.winsSinceAd = 3;
+    expect(Ads.shouldShowInterstitial(9, t), isFalse, reason: 'erken bölüm');
+    expect(Ads.shouldShowInterstitial(12, t), isTrue);
+    Progress.winsSinceAd = 2;
+    expect(Ads.shouldShowInterstitial(12, t), isFalse, reason: 'az galibiyet');
+    Progress.winsSinceAd = 5;
+    Progress.noAds = true;
+    expect(Ads.shouldShowInterstitial(12, t), isFalse, reason: 'reklamsız');
+    Progress.noAds = false;
   });
 
   test('can kaybı ve 30 dakikada dolma', () {

@@ -57,7 +57,7 @@ Her hafta yeni bir yarış! Elmas lige yüksel, genel sıralamada zirveye çık.
    → `build/app/outputs/bundle/release/app-release.aab`.
    Yükleme anahtarı: `android/upload-keystore.jks` + `android/key.properties` (git'e girmez, **yedekle!**). Play App Signing'i açık bırak.
 4. **Gizlilik politikası URL'si:** https://suedatekin.github.io/balon-patlat-gizlilik/
-5. **Uygulama içi ürünler** (Para kazanma → Ürünler → Uygulama içi ürünler), hepsi tüketilebilir:
+5. **Uygulama içi ürünler** (Para kazanma → Ürünler → Uygulama içi ürünler). `no_ads` dışındakiler tüketilebilir:
    | Kimlik | Ad | Önerilen fiyat |
    |---|---|---|
    | `starter_pack` | Başlangıç Paketi | ₺49,99 |
@@ -65,10 +65,14 @@ Her hafta yeni bir yarış! Elmas lige yüksel, genel sıralamada zirveye çık.
    | `coins_6000` | 6.000 Altın | ₺149,99 |
    | `coins_15000` | 15.000 Altın | ₺299,99 |
    | `infinite_6h` | 6 Saat Sonsuz Can | ₺39,99 |
+   | `gold_pass` | Altın Bilet (sezon) | ₺149,99 |
+   | `piggy_bank` | Kumbarayı Kır | ₺59,99 |
+   | `no_ads` | Reklamları Kaldır (**tüketilmez**, tek seferlik) | ₺89,99 |
    Ürünler tanımlanınca mağaza otomatik olarak gerçek ödemeye geçer (test modu yazısı kaybolur).
-6. **AdMob:** https://admob.google.com → uygulama ekle → *Ödüllü* reklam birimi oluştur. Sonra:
+6. **AdMob:** https://admob.google.com → uygulama ekle → bir *Ödüllü* ve bir *Geçiş (Interstitial)* reklam birimi oluştur. Sonra:
    - `android/app/src/main/AndroidManifest.xml` → `APPLICATION_ID` (ca-app-pub-…~…)
-   - `lib/ads.dart` → `rewardedUnitId` (ca-app-pub-…/…)
+   - `lib/ads.dart` → `rewardedUnitId` ve `interstitialUnitId` (ca-app-pub-…/…)
+   - Geçiş reklamı kuralı: 10. bölümden sonra, en az 3 galibiyette bir ve 2,5 dakika arayla; "Reklamları Kaldır" alanlarda hiç çıkmaz.
    Şu an Google'ın TEST kimlikleri var; değiştirmeden yayınlama.
 7. **Veri güvenliği formu:**
    - Toplanan: E-posta (isteğe bağlı, hesap yönetimi), Kullanıcı kimlikleri, Uygulama etkileşimleri/oyun ilerlemesi, Kullanıcı içeriği (sohbet mesajları), Reklam kimliği (AdMob), Satın alma geçmişi (Google Play).

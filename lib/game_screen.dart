@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
+import 'ads.dart';
 import 'audio.dart';
 import 'game.dart';
 import 'level_intro.dart';
@@ -311,7 +312,21 @@ class _GameScreenState extends State<GameScreen>
       Navigator.pop(context);
       return;
     }
+    await _maybeAd();
+    if (!mounted) return;
     await startLevel(context, widget.level + 1, replace: true);
+  }
+
+  /// Kazandıktan sonra haritaya dönüş.
+  Future<void> _toMap() async {
+    await _maybeAd();
+    if (mounted) Navigator.pop(context);
+  }
+
+  /// Normal bölüm kazanıldıysa, kurallar uygunsa geçiş reklamı.
+  Future<void> _maybeAd() async {
+    if (widget.daily || widget.endless || game.state != GameState.won) return;
+    await Ads.maybeInterstitial(widget.level);
   }
 
   /// Başlangıç güçlendiricilerini ilk karede uygular (ızgara o an kurulur).
@@ -1240,6 +1255,25 @@ class _GameScreenState extends State<GameScreen>
               ),
             ],
           ),
+          if (!widget.daily) ...[
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.savings_rounded, color: LP.pink, size: 18),
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    Progress.piggyFull
+                        ? 'Kumbara DOLU! (${formatNum(Progress.piggy)}) · Mağazada kır'
+                        : 'Kumbara +${Progress.lastPiggyGain} · '
+                            '${formatNum(Progress.piggy)}/${formatNum(Progress.piggyMax)}',
+                    style: outfit(13, color: LP.pink),
+                  ),
+                ),
+              ],
+            ),
+          ],
           if (!_adDoubled && _reward > 0) ...[
             const SizedBox(height: 10),
             AdButton(
@@ -1642,7 +1676,7 @@ class _GameScreenState extends State<GameScreen>
       children: [
         _ghostButton(Icons.refresh_rounded, 'Tekrar Oyna', _restart),
         const SizedBox(width: 10),
-        _ghostButton(Icons.map_rounded, 'Harita', () => Navigator.pop(context)),
+        _ghostButton(Icons.map_rounded, 'Harita', _toMap),
       ],
     ),
   );

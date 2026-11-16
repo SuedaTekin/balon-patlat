@@ -63,7 +63,19 @@ const storeItems = <String, StoreItem>{
     '₺39,99',
     Reward(infiniteMinutes: 360),
   ),
+  // kumbara: biriken altının tamamını verir (miktar oyuncuya göre değişir)
+  'piggy_bank': StoreItem('piggy_bank', 'Kumbarayı Kır', '₺59,99', Reward()),
+  // tek seferlik (tüketilmez): geçiş reklamlarını kaldırır + hediye
+  'no_ads': StoreItem(
+    'no_ads',
+    'Reklamları Kaldır',
+    '₺89,99',
+    Reward(coins: 1000),
+  ),
 };
+
+/// Tüketilmeyen (bir kez alınan, geri yüklenebilen) ürünler.
+const nonConsumables = {'no_ads'};
 
 /// Google Play Billing. Ürünler mağazadan yüklenemezse (Play Console'da
 /// henüz tanımlı değilse, emülatör vb.) test moduna düşer: satın alma
@@ -93,9 +105,19 @@ class Billing {
     }
   }
 
-  static void _grant(String id) {
+  static void _grant(String id, {bool restored = false}) {
     final item = storeItems[id];
     if (item == null) return;
+    if (id == 'no_ads') {
+      // geri yüklemede hediye altın tekrar verilmez
+      if (Progress.noAds) return;
+      Progress.noAds = true;
+      if (restored) {
+        Progress.save();
+        return;
+      }
+    }
+    if (id == 'piggy_bank') Progress.breakPiggy();
     Progress.grant(item.reward);
     if (id == 'starter_pack') Progress.starterBought = true;
     if (id == 'gold_pass') Progress.activateGoldPass();
@@ -106,7 +128,10 @@ class Billing {
     for (final p in list) {
       switch (p.status) {
         case PurchaseStatus.purchased || PurchaseStatus.restored:
-          _grant(p.productID);
+          _grant(
+            p.productID,
+            restored: p.status == PurchaseStatus.restored,
+          );
           _waiting.remove(p.productID)?.complete(true);
         case PurchaseStatus.error || PurchaseStatus.canceled:
           _waiting.remove(p.productID)?.complete(false);
@@ -132,9 +157,11 @@ class Billing {
     final c = Completer<bool>();
     _waiting[id] = c;
     try {
-      final ok = await _iap.buyConsumable(
-        purchaseParam: PurchaseParam(productDetails: d),
-      );
+      final param = PurchaseParam(productDetails: d);
+      final ok =
+          nonConsumables.contains(id)
+              ? await _iap.buyNonConsumable(purchaseParam: param)
+              : await _iap.buyConsumable(purchaseParam: param);
       if (!ok) _waiting.remove(id)?.complete(false);
     } catch (_) {
       _waiting.remove(id)?.complete(false);
