@@ -10,4 +10,5 @@ const privacyUrl = 'https://suedatekin.github.io/balon-patlat-gizlilik/';
 /// Google ile giriş: Google Cloud Console'daki **Web uygulaması** OAuth
 /// istemci kimliği (….apps.googleusercontent.com). Boşken Google düğmesi
 /// "henüz ayarlanmadı" der. Gizli anahtar (client secret) buraya KONMAZ.
-const googleWebClientId = '';
+const googleWebClientId =
+    '112515500219-ueaggouadljhtf49u444mvc9uuj16cin.apps.googleusercontent.com';
