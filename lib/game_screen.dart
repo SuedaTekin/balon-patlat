@@ -188,6 +188,15 @@ class _GameScreenState extends State<GameScreen>
       !Progress.infinite;
 
   void _forfeit() {
+    // oynanmış bir bölümden kaybederek çıkmak kazanma serisini bozar
+    if (!widget.daily &&
+        game.state != GameState.won &&
+        game.movesLeft < game.totalMoves) {
+      if (Progress.winStreak != 0) {
+        Progress.winStreak = 0;
+        Progress.save();
+      }
+    }
     if (_wouldLoseLife) {
       Progress.loseLife();
       _lifeTaken = true;
@@ -303,7 +312,7 @@ class _GameScreenState extends State<GameScreen>
 
   // ---------------- kullanıcı girişi ----------------
   void _onDown(PointerDownEvent e) {
-    if ((e.localPosition - game.nextPos).distance < game.r * 1.8) {
+    if ((e.localPosition - game.nextPos).distance < game.ur * 1.8) {
       game.swap();
       Sfx.haptic(0);
       return;
@@ -2086,7 +2095,7 @@ class GamePainter extends CustomPainter {
         text: TextSpan(
           text: f.text,
           style: outfit(
-            r * 0.95,
+            g.ur * 0.95,
             w: FontWeight.w900,
             color: Colors.white.withValues(alpha: 1 - k * k),
             shadows: [
@@ -2181,16 +2190,17 @@ class GamePainter extends CustomPainter {
     // atıcı kaidesi: alttan yükselen ışıklı platform
     final s = g.shooter;
     final dir = Offset(cos(g.aimAngle), sin(g.aimAngle));
+    final u = g.ur; // atıcı bölgesi ölçeği (toplardan bağımsız)
     final base = Rect.fromCenter(
-      center: s + Offset(0, r * 1.25),
-      width: r * 5.2,
-      height: r * 1.5,
+      center: s + Offset(0, u * 1.25),
+      width: u * 5.2,
+      height: u * 1.5,
     );
     canvas.drawOval(
-      base.inflate(r * 0.4),
+      base.inflate(u * 0.4),
       Paint()
         ..color = LP.cyan.withValues(alpha: 0.10)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.6),
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, u * 0.6),
     );
     canvas.drawOval(
       base,
@@ -2205,42 +2215,43 @@ class GamePainter extends CustomPainter {
       base,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = r * 0.08
+        ..strokeWidth = u * 0.08
         ..color = LP.cyan.withValues(alpha: 0.45),
     );
     canvas.drawCircle(
       s,
-      r * 1.55,
+      u * 1.3,
       Paint()..color = LP.bgDeep.withValues(alpha: 0.8),
     );
     canvas.drawCircle(
       s,
-      r * 1.55,
+      u * 1.3,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = r * 0.22
+        ..strokeWidth = u * 0.2
         ..shader = const SweepGradient(
           colors: [LP.goldLight, LP.gold, Color(0xFFC77700), LP.goldLight],
-        ).createShader(Rect.fromCircle(center: s, radius: r * 1.55)),
+        ).createShader(Rect.fromCircle(center: s, radius: u * 1.3)),
     );
-    final tip = s + dir * r * 2.05;
+    final tip = s + dir * u * 2.05;
     final side = Offset(-dir.dy, dir.dx);
     canvas.drawPath(
       Path()
         ..moveTo(tip.dx, tip.dy)
         ..lineTo(
-          (s + dir * r * 1.6 + side * r * 0.32).dx,
-          (s + dir * r * 1.6 + side * r * 0.32).dy,
+          (s + dir * u * 1.6 + side * u * 0.32).dx,
+          (s + dir * u * 1.6 + side * u * 0.32).dy,
         )
         ..lineTo(
-          (s + dir * r * 1.6 - side * r * 0.32).dx,
-          (s + dir * r * 1.6 - side * r * 0.32).dy,
+          (s + dir * u * 1.6 - side * u * 0.32).dx,
+          (s + dir * u * 1.6 - side * u * 0.32).dy,
         )
         ..close(),
       Paint()..color = LP.gold,
     );
     if (g.ballPos == null && g.state == GameState.playing) {
-      drawShot(canvas, s, r * 1.05, g.armed, g.current);
+      // ızgaradaki toplardan biraz büyük (görünür) ama aynı ölçeğe yakın
+      drawShot(canvas, s, r * 1.3, g.armed, g.current);
     }
     final bp = g.ballPos;
     if (bp != null) {
@@ -2277,10 +2288,10 @@ class GamePainter extends CustomPainter {
     }
 
     // sıradaki balon + takas
-    drawBubble(canvas, g.nextPos, r * 0.78, bubbleColors[g.next]);
-    final swapC = g.nextPos + Offset(0, r * 1.45);
-    canvas.drawCircle(swapC, r * 0.45, Paint()..color = LP.surfaceHighest);
-    _icon(canvas, Icons.sync_rounded, swapC, r * 0.6, LP.onSurface);
+    drawBubble(canvas, g.nextPos, r * 1.1, bubbleColors[g.next]);
+    final swapC = g.nextPos + Offset(0, u * 1.45);
+    canvas.drawCircle(swapC, u * 0.45, Paint()..color = LP.surfaceHighest);
+    _icon(canvas, Icons.sync_rounded, swapC, u * 0.6, LP.onSurface);
   }
 
   bool _near(Offset pos) {

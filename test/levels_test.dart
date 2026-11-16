@@ -55,7 +55,7 @@ void main() {
 
   test('altın balon yanındaki patlamayla altın verir', () {
     expect(LevelConfig.forLevel(4).goldCount, 0);
-    expect(LevelConfig.forLevel(6).goldCount, 2);
+    expect(LevelConfig.forLevel(6).goldCount, 3);
     final g = BubbleGame(LevelConfig.forLevel(40))
       ..layout(const Size(392, 640));
     for (var row = 0; row < g.grid.length; row++) {

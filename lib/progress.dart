@@ -66,6 +66,11 @@ class Progress {
   static final Map<String, int> stats = {};
   static final Set<String> claimedQuests = {};
 
+  /// Kazanma serisi: art arda kazanılan bölüm sayısı. Kaybedince sıfırlanır.
+  /// 1: +3 hamle, 2: + Gökkuşağı, 3+: + Bomba (bölüm başında ücretsiz).
+  static int winStreak = 0;
+  static int get streakTier => min(3, winStreak);
+
   /// Günün meydan okumasının en son bitirildiği gün ve açılan bölge sandıkları.
   static String dailyDoneDay = '';
   static final Set<int> regionChests = {};
@@ -188,6 +193,7 @@ class Progress {
     'passSeason': passSeason,
     'passXp': passXp,
     'passGold': passGold,
+    'winStreak': winStreak,
     'dailyDoneDay': dailyDoneDay,
     'regionChests': regionChests.toList(),
     'lifetime': Map.of(lifetime),
@@ -240,6 +246,7 @@ class Progress {
     weeklyScore = i('weeklyScore', 0);
     weeklyStars = i('weeklyStars', 0);
     welcomeGiven = j['welcomeGiven'] as bool? ?? false;
+    winStreak = i('winStreak', 0);
     dailyDoneDay = s('dailyDoneDay');
     regionChests
       ..clear()
@@ -410,6 +417,7 @@ class Progress {
     weeklyStars += starCount;
     // bilet XP: galibiyet 10 + yıldız başına 10
     addPassXp(10 + starCount * 10);
+    winStreak++;
     save();
     return reward;
   }

@@ -186,6 +186,21 @@ void main() {
     expect(Progress.dailyAvailable, isFalse);
   });
 
+  test('kazanma serisi galibiyetle artar, en fazla 3 kademe', () {
+    expect(Progress.winStreak, 0);
+    Progress.recordWin(1, 3, 100);
+    expect(Progress.streakTier, 1);
+    Progress.recordWin(2, 3, 100);
+    Progress.recordWin(3, 3, 100);
+    Progress.recordWin(4, 3, 100);
+    expect(Progress.winStreak, 4);
+    expect(Progress.streakTier, 3);
+    final j = Progress.toJson();
+    Progress.resetLocal();
+    Progress.fromJson(j);
+    expect(Progress.winStreak, 4);
+  });
+
   test('kayıt yeniden yüklenince korunur', () async {
     Progress.coins = 1234;
     Progress.lives = 2;

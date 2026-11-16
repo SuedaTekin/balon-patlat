@@ -76,6 +76,76 @@ class _LevelIntroState extends State<_LevelIntro> {
 
   bool get _ownRainbow => (Progress.boosters[Booster.rainbow] ?? 0) > 0;
 
+  // kazanma serisinden gelen ücretsiz başlangıç güçlendiricileri
+  bool get _freeMoves => Progress.streakTier >= 1;
+  bool get _freeRainbow => Progress.streakTier >= 2;
+  bool get _freeBomb => Progress.streakTier >= 3;
+
+  Widget get _streakPrice =>
+      Text('Seriden 🔥', style: outfit(13, color: const Color(0xFFFF7A1A)));
+
+  Widget _streakCard() {
+    final s = Progress.winStreak;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFFFF7A1A).withValues(alpha: 0.28),
+            const Color(0xFFFF4E7C).withValues(alpha: 0.18),
+          ],
+        ),
+        border: Border.all(
+          color: const Color(0xFFFF7A1A).withValues(alpha: 0.7),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.local_fire_department_rounded,
+            color: Color(0xFFFF7A1A),
+            size: 30,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'KAZANMA SERİSİ: $s',
+                  style: outfit(15, w: FontWeight.w900),
+                ),
+                Text(
+                  s >= 3
+                      ? '+3 hamle, Gökkuşağı ve Bomba ücretsiz!'
+                      : s == 2
+                      ? '+3 hamle ve Gökkuşağı ücretsiz · 1 galibiyet daha: Bomba'
+                      : '+3 hamle ücretsiz · 1 galibiyet daha: Gökkuşağı',
+                  style: jakarta(11.5, color: LP.onSurface),
+                ),
+              ],
+            ),
+          ),
+          for (var i = 1; i <= 3; i++)
+            Container(
+              width: 10,
+              height: 10,
+              margin: const EdgeInsets.only(left: 4),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color:
+                    i <= Progress.streakTier
+                        ? const Color(0xFFFF7A1A)
+                        : LP.surfaceHighest,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   int get _cost =>
       (bomb ? startBombPrice : 0) +
       (rainbow && !_ownRainbow ? startRainbowPrice : 0) +
@@ -89,7 +159,11 @@ class _LevelIntroState extends State<_LevelIntro> {
     Progress.save();
     Navigator.pop(
       context,
-      StartBoosters(bomb: bomb, rainbow: rainbow, extraMoves: moves),
+      StartBoosters(
+        bomb: bomb || _freeBomb,
+        rainbow: rainbow || _freeRainbow,
+        extraMoves: moves || _freeMoves,
+      ),
     );
   }
 
@@ -133,6 +207,7 @@ class _LevelIntroState extends State<_LevelIntro> {
                   const SizedBox(height: 10),
                   _record(stars, best),
                   const SizedBox(height: 14),
+                  if (Progress.winStreak > 0) _streakCard(),
                   _section(Icons.bolt_rounded, 'BAŞLANGIÇ GÜÇLENDİRİCİLERİ'),
                   Row(
                     children: [
@@ -483,37 +558,48 @@ class _LevelIntroState extends State<_LevelIntro> {
   );
 
   Widget _bombCard() => _card(
-    on: bomb,
+    on: bomb || _freeBomb,
     icon: CustomPaint(painter: _BombIconPainter()),
     title: 'Bomba',
     price:
-        bomb
+        _freeBomb
+            ? _streakPrice
+            : bomb
             ? Text('Seçili', style: outfit(13, color: LP.cyan))
             : _coinPrice(startBombPrice),
-    onTap: bomb || _canToggle(startBombPrice) ? () => bomb = !bomb : null,
+    onTap:
+        _freeBomb
+            ? () {}
+            : bomb || _canToggle(startBombPrice)
+            ? () => bomb = !bomb
+            : null,
   );
 
   Widget _rainbowCard() {
     final own = Progress.boosters[Booster.rainbow] ?? 0;
     return _card(
-      on: rainbow,
+      on: rainbow || _freeRainbow,
       icon: const BoosterIcon(Booster.rainbow, size: 50),
       title: 'Gökkuşağı',
       price:
-          rainbow
+          _freeRainbow
+              ? _streakPrice
+              : rainbow
               ? Text('Seçili', style: outfit(13, color: LP.cyan))
               : own > 0
               ? Text('$own Adet', style: outfit(13, color: LP.muted))
               : _coinPrice(startRainbowPrice),
       onTap:
-          rainbow || own > 0 || _canToggle(startRainbowPrice)
+          _freeRainbow
+              ? () {}
+              : rainbow || own > 0 || _canToggle(startRainbowPrice)
               ? () => rainbow = !rainbow
               : null,
     );
   }
 
   Widget _movesCard() => _card(
-    on: moves,
+    on: moves || _freeMoves,
     icon: Container(
       alignment: Alignment.center,
       decoration: const BoxDecoration(
@@ -524,10 +610,17 @@ class _LevelIntroState extends State<_LevelIntro> {
     ),
     title: 'Ekstra Hamle',
     price:
-        moves
+        _freeMoves
+            ? _streakPrice
+            : moves
             ? Text('Seçili', style: outfit(13, color: LP.cyan))
             : _coinPrice(startMovesPrice),
-    onTap: moves || _canToggle(startMovesPrice) ? () => moves = !moves : null,
+    onTap:
+        _freeMoves
+            ? () {}
+            : moves || _canToggle(startMovesPrice)
+            ? () => moves = !moves
+            : null,
   );
 }
 

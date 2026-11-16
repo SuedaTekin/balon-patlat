@@ -93,11 +93,12 @@ class LevelConfig {
   /// taş balonlar.
   factory LevelConfig.forLevel(int level) => LevelConfig(
     level,
-    min(4 + (level + 1) ~/ 2, 12),
+    min(5 + (level + 1) ~/ 2, 13),
     level < 3 ? 3 : (level < 7 ? 4 : (level < 16 ? 5 : 6)),
+    // 11 sütunda yeni sıra 11 balon getirir; bu yüzden bir atış daha süre
     level < 4
         ? 0
-        : max(kindOf(level) == LevelKind.superHard ? 3 : 4, 9 - level ~/ 5),
+        : max(kindOf(level) == LevelKind.superHard ? 4 : 5, 10 - level ~/ 5),
   );
 
   static LevelKind kindOf(int level) {
@@ -137,14 +138,14 @@ class LevelConfig {
     return r;
   }
 
-  /// Izgaradaki bomba balon sayısı (12. bölümden itibaren 1–3).
-  int get bombCount => level < 12 ? 0 : min(3, 1 + (level - 12) ~/ 60);
+  /// Izgaradaki bomba balon sayısı (12. bölümden itibaren 2–4).
+  int get bombCount => level < 12 ? 0 : min(4, 2 + (level - 12) ~/ 80);
 
-  /// Izgaradaki altın balon sayısı (5. bölümden itibaren 1–2).
-  int get goldCount => level < 5 ? 0 : (level % 3 == 0 ? 2 : 1);
+  /// Izgaradaki altın balon sayısı (5. bölümden itibaren 2–3).
+  int get goldCount => level < 5 ? 0 : (level % 3 == 0 ? 3 : 2);
 
   /// Tehlike çizgisinin üstünde boş bırakılan sıra sayısı.
-  int get freeRows => level < 10 ? 5 : 4;
+  int get freeRows => level < 10 ? 7 : 6;
 
   /// Top hızı (ekran genişliği/saniye), seviyeyle hafifçe artar.
   double get speedFactor => 3.4 + min(level, 150) * 0.010;
@@ -158,7 +159,8 @@ class LevelConfig {
 }
 
 class BubbleGame {
-  static const int cols = 8;
+  /// Bir sıradaki top sayısı (11: daha küçük ve daha çok top).
+  static const int cols = 11;
 
   BubbleGame(this.cfg);
   final LevelConfig cfg;
@@ -226,7 +228,11 @@ class BubbleGame {
 
   double get speed => width * cfg.speedFactor;
   int get shotsUntilRow => cfg.shotsPerRow - missCount;
-  Offset get nextPos => shooter + Offset(-r * 4.4, r * 0.3);
+
+  /// Atıcı bölgesinin ölçeği (halka, sıradaki balon, takas): toplar
+  /// küçülse de parmakla rahat kullanılsın diye eski boyutta kalır.
+  double get ur => width / 16;
+  Offset get nextPos => shooter + Offset(-ur * 4.4, ur * 0.3);
   double get dangerY => (maxRows - 1) * rowH;
 
   /// Renkli (temizlenmesi gereken) balon sayısı.
@@ -243,8 +249,8 @@ class BubbleGame {
     height = s.height;
     r = width / (cols * 2);
     rowH = r * sqrt(3);
-    shooter = Offset(width / 2, height - r * 2.4);
-    maxRows = max(7, ((shooter.dy - r * 3.5) / rowH).floor() + 1);
+    shooter = Offset(width / 2, height - ur * 2.4);
+    maxRows = max(9, ((shooter.dy - ur * 3.5) / rowH).floor() + 1);
     if (!_ready) {
       _ready = true;
       _generate();
@@ -268,12 +274,15 @@ class BubbleGame {
     parity = 0;
     grid = List.generate(maxRows, (_) => List<int?>.filled(cols, null));
     final rows = max(1, min(cfg.rows, maxRows - cfg.freeRows));
+    final cluster = 0.55 - min(0.12, max(0, cfg.level - 40) * 0.0005);
     for (var row = 0; row < rows; row++) {
       for (var c = 0; c < rowLen(row); c++) {
         var color = g.nextInt(cfg.colors);
-        if (c > 0 && g.nextDouble() < 0.45) {
+        // komşu rengi kopyalama: ilk bölümlerde büyük kümeler, ilerledikçe
+        // daha dağınık renkler (zorluk sona doğru artsın)
+        if (c > 0 && g.nextDouble() < cluster) {
           color = grid[row][c - 1]!;
-        } else if (row > 0 && g.nextDouble() < 0.35) {
+        } else if (row > 0 && g.nextDouble() < cluster - 0.1) {
           final up = grid[row - 1][min(c, rowLen(row - 1) - 1)];
           if (up != null) color = up;
         }
@@ -287,7 +296,8 @@ class BubbleGame {
       for (var row = 1; row < rows; row++) {
         final weight = 0.6 + 0.8 * row / max(1, rows - 1);
         for (var c = 0; c < rowLen(row); c++) {
-          if (g.nextDouble() < sr * weight) grid[row][c] = stone;
+          // 11 sütunluk ızgarada taş sayısı aşırı artmasın (×0.6)
+          if (g.nextDouble() < sr * weight * 0.6) grid[row][c] = stone;
         }
       }
       // çok az renkli balon kaldıysa son sırayı renklendir
@@ -496,7 +506,7 @@ class BubbleGame {
   /// Tehlike çizgisine yakın alt sıraları patlatıp oyuna devam ettirir.
   void rescue() {
     final cells = <Cell>[];
-    for (var row = max(0, maxRows - 5); row < grid.length; row++) {
+    for (var row = max(0, maxRows - 7); row < grid.length; row++) {
       for (var c = 0; c < rowLen(row); c++) {
         if (grid[row][c] != null) cells.add((row, c));
       }
