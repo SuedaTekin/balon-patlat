@@ -53,6 +53,34 @@ void main() {
     expect(g.pickColor(), lessThan(bubbleColors.length));
   });
 
+  test('altın balon yanındaki patlamayla altın verir', () {
+    expect(LevelConfig.forLevel(4).goldCount, 0);
+    expect(LevelConfig.forLevel(6).goldCount, 2);
+    final g = BubbleGame(LevelConfig.forLevel(40))
+      ..layout(const Size(392, 640));
+    for (var row = 0; row < g.grid.length; row++) {
+      for (var c = 0; c < g.rowLen(row); c++) {
+        g.grid[row][c] = row < 5 ? 1 : null;
+      }
+    }
+    g.grid[3][3] = goldCell;
+    var coins = 0;
+    g.onGold = (n) => coins += n;
+    g.popCells([(3, 4)]);
+    expect(g.grid[3][3], isNull);
+    expect(coins, goldCoins);
+    expect(g.goldPopped, 1);
+    expect(isColor(goldCell), isFalse);
+  });
+
+  test('günlük meydan okuma: gün aynıysa aynı dizilim, farklıysa farklı', () {
+    List<List<int?>> grid(String day) =>
+        (BubbleGame(LevelConfig.daily(40, day))
+          ..layout(const Size(392, 640))).grid;
+    expect(grid('2026-11-16'), grid('2026-11-16'));
+    expect(grid('2026-11-16'), isNot(grid('2026-11-17')));
+  });
+
   test('yanındaki balon patlayınca bomba iki halkayı temizler', () {
     final g = BubbleGame(LevelConfig.forLevel(40))
       ..layout(const Size(392, 640));

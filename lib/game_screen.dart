@@ -27,9 +27,13 @@ class GameScreen extends StatefulWidget {
     super.key,
     required this.level,
     this.start = const StartBoosters(),
+    this.daily = false,
   });
   final int level;
   final StartBoosters start;
+
+  /// Günün meydan okuması: kendi dizilimi, bölüm ilerlemesini etkilemez.
+  final bool daily;
 
   @override
   State<GameScreen> createState() => _GameScreenState();
@@ -45,6 +49,7 @@ class _GameScreenState extends State<GameScreen>
   int _reward = 0;
   bool _lostSfx = false, _adContinueUsed = false, _adDoubled = false;
   bool _startApplied = false;
+  Reward? _dailyReward;
   final List<ShotKind> _startQueue = [];
   ShotKind? _prepaid;
   static int _open = 0;
@@ -52,7 +57,15 @@ class _GameScreenState extends State<GameScreen>
   @override
   void initState() {
     super.initState();
-    game = BubbleGame(LevelConfig.forLevel(widget.level));
+    game = BubbleGame(
+      widget.daily
+          ? LevelConfig.daily(widget.level, todayKey)
+          : LevelConfig.forLevel(widget.level),
+    );
+    game.onGold = (n) {
+      Progress.coins += n;
+      Progress.addStat('gold');
+    };
     game.onPop = (n) => Sfx.haptic(n >= 6 ? 2 : 1);
     game.onSfx = (e) {
       if (e == 'bomb') Progress.addStat('bomb');
@@ -85,6 +98,13 @@ class _GameScreenState extends State<GameScreen>
 
   static (String, String, Color)? _introFor(int level) {
     final cfg = LevelConfig.forLevel(level);
+    if (level == 5) {
+      return (
+        'YENİ: ALTIN BALON',
+        'Yanındaki balonu patlat, altın balon sana +$goldCoins altın versin!',
+        const Color(0xFFFFC21A),
+      );
+    }
     if (level == 12) {
       return (
         'YENİ: BOMBA BALON',
@@ -189,7 +209,7 @@ class _GameScreenState extends State<GameScreen>
   }
 
   Future<void> _next() async {
-    if (widget.level >= maxLevel) {
+    if (widget.daily || widget.level >= maxLevel) {
       Navigator.pop(context);
       return;
     }
@@ -237,9 +257,15 @@ class _GameScreenState extends State<GameScreen>
     _applyStart();
     if (game.state == GameState.won && !_handledWin) {
       _handledWin = true;
-      final prev = Progress.bestScores[widget.level];
-      _newBest = prev != null && game.score > prev;
-      _reward = Progress.recordWin(widget.level, game.stars, game.score);
+      if (widget.daily) {
+        // günlük meydan okuma: bölüm ilerlemesine dokunmaz, ödülü ayrı
+        _dailyReward = Progress.completeDaily();
+        _reward = _dailyReward!.coins;
+      } else {
+        final prev = Progress.bestScores[widget.level];
+        _newBest = prev != null && game.score > prev;
+        _reward = Progress.recordWin(widget.level, game.stars, game.score);
+      }
       Sfx.haptic(3);
       Sfx.play('win');
       for (var i = 0; i < game.stars; i++) {
@@ -509,6 +535,14 @@ class _GameScreenState extends State<GameScreen>
               if (_intro != null && game.state == GameState.playing)
                 _introBanner(_intro!),
               if (game.state == GameState.won) _victory(),
+              if (game.wonAt != null && game.time - game.wonAt! < 4)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: CustomPaint(
+                      painter: _ConfettiPainter(game.time - game.wonAt!),
+                    ),
+                  ),
+                ),
               if (game.state == GameState.lostMoves ||
                   game.state == GameState.lostDanger)
                 _defeat(),
@@ -577,13 +611,20 @@ class _GameScreenState extends State<GameScreen>
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(switch (game.cfg.kind) {
-                      LevelKind.normal => 'SEVİYE',
-                      LevelKind.hard => 'ZOR',
-                      LevelKind.superHard => 'ÇOK ZOR',
-                    }, style: outfit(11, color: LP.muted, spacing: 1)),
                     Text(
-                      '${widget.level}',
+                      widget.daily
+                          ? 'GÜNLÜK'
+                          : switch (game.cfg.kind) {
+                            LevelKind.normal => 'SEVİYE',
+                            LevelKind.hard => 'ZOR',
+                            LevelKind.superHard => 'ÇOK ZOR',
+                          },
+                      style: outfit(11, color: LP.muted, spacing: 1),
+                    ),
+                    Text(
+                      widget.daily
+                          ? '${DateTime.now().day}.${DateTime.now().month}'
+                          : '${widget.level}',
                       style: outfit(
                         20,
                         w: FontWeight.w900,
@@ -600,86 +641,133 @@ class _GameScreenState extends State<GameScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text.rich(
-                  TextSpan(
-                    children: [
-                      TextSpan(
-                        text: 'Skor: ',
-                        style: outfit(14, w: FontWeight.w700),
+                Row(
+                  children: [
+                    Expanded(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          formatNum(game.score),
+                          style: outfit(19, w: FontWeight.w900, color: LP.gold),
+                        ),
                       ),
-                      TextSpan(
-                        text: formatNum(game.score),
-                        style: outfit(15, color: LP.gold),
+                    ),
+                    // şu an kazanılırsa alınacak yıldızlar
+                    for (var i = 0; i < 3; i++)
+                      AnimatedScale(
+                        duration: const Duration(milliseconds: 250),
+                        scale: i < game.projectedStars ? 1 : 0.8,
+                        child: Icon(
+                          Icons.star_rounded,
+                          size: 18,
+                          color:
+                              i < game.projectedStars
+                                  ? LP.gold
+                                  : LP.surfaceHighest,
+                        ),
                       ),
-                    ],
-                  ),
+                  ],
                 ),
-                const SizedBox(height: 5),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(999),
-                  child: Container(
-                    height: 10,
-                    color: LP.bgDeep,
-                    alignment: Alignment.centerLeft,
-                    child: FractionallySizedBox(
-                      widthFactor: max(0.02, game.cleared),
+                const SizedBox(height: 4),
+                // hedef ilerlemesi
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(999),
                       child: Container(
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [LP.gold, Color(0xFFFF5C93)],
+                        height: 12,
+                        color: LP.bgDeep,
+                        alignment: Alignment.centerLeft,
+                        child: FractionallySizedBox(
+                          widthFactor: max(0.03, game.cleared),
+                          child: Container(
+                            decoration: const BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [LP.cyan, LP.gold, Color(0xFFFF5C93)],
+                              ),
+                            ),
                           ),
                         ),
                       ),
                     ),
+                    Text(
+                      '%${(game.cleared * 100).round()}',
+                      style: outfit(9, color: Colors.white, spacing: 0.5),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                if (game.cfg.shotsPerRow > 0)
+                  Row(
+                    children: [
+                      Text('Yeni sıra ', style: jakarta(10, color: LP.muted)),
+                      for (var i = 0; i < game.cfg.shotsPerRow; i++)
+                        Container(
+                          width: 7,
+                          height: 7,
+                          margin: const EdgeInsets.only(right: 3),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color:
+                                i < game.shotsUntilRow
+                                    ? LP.cyan
+                                    : LP.ruby.withValues(alpha: 0.8),
+                          ),
+                        ),
+                    ],
+                  )
+                else
+                  Text(
+                    'Tüm balonları temizle!',
+                    style: jakarta(10, color: LP.muted),
                   ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  game.cfg.shotsPerRow > 0
-                      ? 'Yeni sıra: ${game.shotsUntilRow} atış'
-                      : 'Tüm balonları temizle!',
-                  style: jakarta(10.5, color: LP.muted),
-                ),
               ],
             ),
           ),
           const SizedBox(width: 8),
-          Container(
-            width: 68,
-            height: 68,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(
-                center: const Alignment(-0.3, -0.4),
-                colors:
-                    low
-                        ? const [Color(0xFFFF7FA8), LP.ruby, LP.rubyLedge]
-                        : const [Color(0xFFFF5C93), LP.rubyDeep, LP.rubyLedge],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: LP.ruby.withValues(alpha: low ? 0.8 : 0.35),
-                  blurRadius: low ? 22 : 12,
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  'HAMLE',
-                  style: outfit(10, color: Colors.white70, spacing: 1),
-                ),
-                Text(
-                  '${game.movesLeft}',
-                  style: outfit(
-                    26,
-                    w: FontWeight.w900,
-                    color: Colors.white,
-                    shadows: embossShadow,
-                  ),
-                ),
-              ],
+          Transform.scale(
+            // hamle azalınca nabız atar
+            scale: low ? 1 + 0.06 * sin(game.time * 8).abs() : 1,
+            child: _movesBadge(low),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _movesBadge(bool low) {
+    return Container(
+      width: 68,
+      height: 68,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          center: const Alignment(-0.3, -0.4),
+          colors:
+              low
+                  ? const [Color(0xFFFF7FA8), LP.ruby, LP.rubyLedge]
+                  : const [Color(0xFFFF5C93), LP.rubyDeep, LP.rubyLedge],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: LP.ruby.withValues(alpha: low ? 0.8 : 0.35),
+            blurRadius: low ? 22 : 12,
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text('HAMLE', style: outfit(10, color: Colors.white70, spacing: 1)),
+          Text(
+            '${game.movesLeft}',
+            style: outfit(
+              26,
+              w: FontWeight.w900,
+              color: Colors.white,
+              shadows: embossShadow,
             ),
           ),
         ],
@@ -688,6 +776,62 @@ class _GameScreenState extends State<GameScreen>
   }
 
   Widget _field() {
+    // büyük patlamalarda kısa ekran sarsıntısı
+    final s = game.shake;
+    final shakeOffset =
+        s > 0
+            ? Offset(
+              sin(game.time * 70) * 7 * (s / 0.4),
+              cos(game.time * 55) * 5 * (s / 0.4),
+            )
+            : Offset.zero;
+    return Transform.translate(offset: shakeOffset, child: _fieldBody());
+  }
+
+  Widget _praiseBanner() {
+    final t = (1.2 - game.praiseT).clamp(0.0, 1.2);
+    final pop = t < 0.18 ? 0.4 + t / 0.18 * 0.8 : 1.2 - min(0.2, (t - 0.18));
+    final fade = game.praiseT < 0.3 ? game.praiseT / 0.3 : 1.0;
+    final color = switch (game.praise) {
+      'EFSANE!' => const Color(0xFFB45CFF),
+      'MÜKEMMEL!' => LP.pink,
+      _ => LP.gold,
+    };
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: Align(
+          alignment: const Alignment(0, -0.15),
+          child: Opacity(
+            opacity: fade.clamp(0.0, 1.0),
+            child: Transform.scale(
+              scale: pop,
+              child: Transform.rotate(
+                angle: -0.06,
+                child: Text(
+                  game.praise!,
+                  style: outfit(
+                    46,
+                    w: FontWeight.w900,
+                    color: Colors.white,
+                    shadows: [
+                      Shadow(color: color, blurRadius: 24),
+                      Shadow(color: color, offset: const Offset(0, 4)),
+                      const Shadow(
+                        color: Color(0xFF1A0730),
+                        offset: Offset(0, 7),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _fieldBody() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12),
       decoration: glassCard(radius: 32),
@@ -713,6 +857,7 @@ class _GameScreenState extends State<GameScreen>
                     painter: GamePainter(game),
                   ),
                 ),
+                if (game.praise != null) _praiseBanner(),
                 if (game.comboText != null)
                   Positioned(
                     top: 6,
@@ -864,7 +1009,10 @@ class _GameScreenState extends State<GameScreen>
         mainAxisSize: MainAxisSize.min,
         children: [
           _Ribbon(
-            text: 'SEVİYE ${widget.level}\nTAMAMLANDI!',
+            text:
+                widget.daily
+                    ? 'GÜNÜN MEYDAN\nOKUMASI TAMAM!'
+                    : 'SEVİYE ${widget.level}\nTAMAMLANDI!',
             colors: const [LP.goldLight, LP.gold],
             ledge: LP.goldLedge,
             textColor: const Color(0xFF3D2400),
@@ -987,7 +1135,7 @@ class _GameScreenState extends State<GameScreen>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    widget.level >= maxLevel
+                    widget.daily || widget.level >= maxLevel
                         ? 'HARİTAYA DÖN'
                         : 'SONRAKİ SEVİYE',
                     style: outfit(
@@ -1589,6 +1737,44 @@ class GamePainter extends CustomPainter {
     );
   }
 
+  /// Altın balon: parlayan altın gövde, ortada para simgesi, yıldız parıltısı.
+  static void drawGold(Canvas canvas, Offset c, double radius, [double t = 0]) {
+    canvas.drawCircle(
+      c,
+      radius * 1.15,
+      Paint()
+        ..color = const Color(
+          0xFFFFD54A,
+        ).withValues(alpha: 0.35 + 0.2 * sin(t * 5))
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, radius * 0.4),
+    );
+    drawBubble(canvas, c, radius, const Color(0xFFFFC21A), glow: false);
+    canvas.drawCircle(
+      c,
+      radius * 0.97,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = radius * 0.1
+        ..color = const Color(0xFFFFF3B0),
+    );
+    _icon(
+      canvas,
+      Icons.monetization_on_rounded,
+      c,
+      radius * 1.05,
+      const Color(0xFF8A5A00),
+    );
+    // dönen parıltı
+    final a = t * 2.4;
+    final sp = c + Offset(cos(a), sin(a)) * radius * 0.75;
+    final tw = 0.5 + 0.5 * sin(t * 9);
+    canvas.drawCircle(
+      sp,
+      radius * 0.13 * (0.6 + tw * 0.6),
+      Paint()..color = Colors.white.withValues(alpha: 0.6 + tw * 0.4),
+    );
+  }
+
   /// Bomba balon: parlak siyah gövde, fitil ve kıvılcım, kırmızı halka.
   static void drawBomb(Canvas canvas, Offset c, double radius, [double t = 0]) {
     canvas.drawCircle(
@@ -1819,6 +2005,8 @@ class GamePainter extends CustomPainter {
           drawStone(canvas, p, r * 0.93);
         } else if (v == bombCell) {
           drawBomb(canvas, p, r * 0.93, g.time + row + c);
+        } else if (v == goldCell) {
+          drawGold(canvas, p, r * 0.93, g.time + row * 0.7 + c);
         } else {
           drawBubble(canvas, p, r * 0.93, bubbleColors[v]);
         }
@@ -1831,6 +2019,8 @@ class GamePainter extends CustomPainter {
         drawStone(canvas, p.pos, r * 0.93);
       } else if (p.falling && p.color == bombCell) {
         drawBomb(canvas, p.pos, r * 0.93);
+      } else if (p.falling && p.color == goldCell) {
+        drawGold(canvas, p.pos, r * 0.93);
       } else if (p.falling) {
         drawBubble(
           canvas,
@@ -1847,6 +2037,8 @@ class GamePainter extends CustomPainter {
                 ? const Color(0xFF9AA3B5)
                 : p.color == bombCell
                 ? const Color(0xFFFF4D4D)
+                : p.color == goldCell
+                ? const Color(0xFFFFD54A)
                 : bubbleColors[p.color];
         canvas.drawCircle(
           p.pos,
@@ -1986,13 +2178,40 @@ class GamePainter extends CustomPainter {
       }
     }
 
-    // atıcı halkası
+    // atıcı kaidesi: alttan yükselen ışıklı platform
     final s = g.shooter;
     final dir = Offset(cos(g.aimAngle), sin(g.aimAngle));
+    final base = Rect.fromCenter(
+      center: s + Offset(0, r * 1.25),
+      width: r * 5.2,
+      height: r * 1.5,
+    );
+    canvas.drawOval(
+      base.inflate(r * 0.4),
+      Paint()
+        ..color = LP.cyan.withValues(alpha: 0.10)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.6),
+    );
+    canvas.drawOval(
+      base,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF3A2A78), Color(0xFF160B3A)],
+        ).createShader(base),
+    );
+    canvas.drawOval(
+      base,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = r * 0.08
+        ..color = LP.cyan.withValues(alpha: 0.45),
+    );
     canvas.drawCircle(
       s,
       r * 1.55,
-      Paint()..color = LP.bgDeep.withValues(alpha: 0.6),
+      Paint()..color = LP.bgDeep.withValues(alpha: 0.8),
     );
     canvas.drawCircle(
       s,
@@ -2025,6 +2244,26 @@ class GamePainter extends CustomPainter {
     }
     final bp = g.ballPos;
     if (bp != null) {
+      // uçan balonun arkasında kısa iz
+      final v = g.ballVel;
+      final vl = v.distance;
+      if (vl > 0) {
+        final back = v / vl;
+        final trailColor = switch (g.ballKind) {
+          ShotKind.normal => bubbleColors[g.ballColor],
+          ShotKind.fire => const Color(0xFFFF7A1A),
+          ShotKind.bomb => const Color(0xFFFF4D4D),
+          ShotKind.laser => LP.cyan,
+          ShotKind.rainbow => Colors.white,
+        };
+        for (var i = 1; i <= 6; i++) {
+          canvas.drawCircle(
+            bp - back * (r * 0.55 * i),
+            r * (0.85 - i * 0.11),
+            Paint()..color = trailColor.withValues(alpha: 0.22 - i * 0.03),
+          );
+        }
+      }
       if (g.ballKind == ShotKind.fire) {
         canvas.drawCircle(
           bp,
@@ -2059,4 +2298,45 @@ class GamePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+/// Zafer konfetisi: üstten dökülen, dönen renkli kağıtlar.
+class _ConfettiPainter extends CustomPainter {
+  _ConfettiPainter(this.t);
+  final double t;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rnd = Random(7);
+    final fade = t > 3 ? (4 - t).clamp(0.0, 1.0) : 1.0;
+    for (var i = 0; i < 90; i++) {
+      final delay = rnd.nextDouble() * 0.6;
+      final x0 = rnd.nextDouble() * size.width;
+      final speed = 220 + rnd.nextDouble() * 260;
+      final sway = 18 + rnd.nextDouble() * 30;
+      final spin = 4 + rnd.nextDouble() * 8;
+      final w = 7 + rnd.nextDouble() * 7;
+      final color = bubbleColors[i % bubbleColors.length];
+      final tt = t - delay;
+      if (tt < 0) continue;
+      final y = -20 + tt * speed;
+      if (y > size.height + 20) continue;
+      final x = x0 + sin(tt * 3 + i) * sway;
+      canvas.save();
+      canvas.translate(x, y);
+      canvas.rotate(tt * spin + i);
+      canvas.scale(1, 0.4 + 0.6 * cos(tt * spin * 1.3 + i).abs());
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(center: Offset.zero, width: w, height: w * 0.55),
+          const Radius.circular(2),
+        ),
+        Paint()..color = color.withValues(alpha: fade),
+      );
+      canvas.restore();
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ConfettiPainter old) => old.t != t;
 }

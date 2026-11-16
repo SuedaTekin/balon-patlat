@@ -52,6 +52,17 @@ Future<void> startLevel(
   }
 }
 
+/// Günün meydan okumasını başlatır (can harcar, bölüm ilerlemesini etkilemez).
+Future<void> startDaily(BuildContext context) async {
+  if (!Progress.dailyAvailable) return;
+  if (!await ensureLife(context) || !context.mounted) return;
+  await Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => GameScreen(level: Progress.unlocked, daily: true),
+    ),
+  );
+}
+
 class _LevelIntro extends StatefulWidget {
   const _LevelIntro({required this.level});
   final int level;

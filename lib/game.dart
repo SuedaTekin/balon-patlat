@@ -48,6 +48,11 @@ bool isColor(int? v) => v != null && v < bubbleColors.length;
 /// Taş gibi, kazanmak için temizlenmesi gerekmez.
 const int bombCell = 98;
 
+/// Altın balon: yanındaki bir balon patlayınca (ya da Ateş/Lazer/Bomba
+/// değince) patlar ve hemen [goldCoins] altın verir. Temizlenmesi gerekmez.
+const int goldCell = 97;
+const int goldCoins = 15;
+
 /// Toplam bölüm sayısı.
 const int maxLevel = 500;
 
@@ -57,7 +62,31 @@ enum LevelKind { normal, hard, superHard }
 
 class LevelConfig {
   final int level, rows, colors, shotsPerRow;
-  const LevelConfig(this.level, this.rows, this.colors, this.shotsPerRow);
+
+  /// Dizilim tohumu; null ise bölüm numarasından türetilir. Günlük meydan
+  /// okuma her gün farklı bir dizilim için kendi tohumunu verir.
+  final int? seed;
+  const LevelConfig(
+    this.level,
+    this.rows,
+    this.colors,
+    this.shotsPerRow, {
+    this.seed,
+  });
+
+  /// Günün meydan okuması: oyuncunun seviyesine yakın zorlukta, her gün
+  /// değişen ama herkes için aynı dizilim.
+  factory LevelConfig.daily(int playerLevel, String day) {
+    final base = LevelConfig.forLevel(playerLevel.clamp(15, 400));
+    return LevelConfig(
+      base.level,
+      base.rows,
+      base.colors,
+      base.shotsPerRow,
+      // herkeste aynı olsun diye sabit bir dize karması
+      seed: day.codeUnits.fold<int>(7, (h, c) => (h * 31 + c) & 0x7fffffff),
+    );
+  }
 
   /// Zorluk eğrisi: seviye arttıkça daha çok sıra, daha çok renk,
   /// daha az hamle, daha sık inen yeni sıralar ve 21. bölümden sonra
@@ -110,6 +139,9 @@ class LevelConfig {
 
   /// Izgaradaki bomba balon sayısı (12. bölümden itibaren 1–3).
   int get bombCount => level < 12 ? 0 : min(3, 1 + (level - 12) ~/ 60);
+
+  /// Izgaradaki altın balon sayısı (5. bölümden itibaren 1–2).
+  int get goldCount => level < 5 ? 0 : (level % 3 == 0 ? 2 : 1);
 
   /// Tehlike çizgisinin üstünde boş bırakılan sıra sayısı.
   int get freeRows => level < 10 ? 5 : 4;
@@ -164,6 +196,21 @@ class BubbleGame {
   /// Son çarpışma noktası ve üstünden geçen süre (komşu sallanması).
   Offset? impactPos;
   double impactT = 9;
+
+  /// Ekran sarsıntısı (saniye, azalır) ve büyük patlamalarda övgü yazısı.
+  double shake = 0;
+  String? praise;
+  double praiseT = 0;
+
+  /// Bölümün kazanıldığı an (konfeti için).
+  double? wonAt;
+
+  /// Şu an kazanılırsa alınacak yıldız (kalan hamle oranına göre).
+  int get projectedStars {
+    final ratio = movesLeft / max(1, totalMoves);
+    return ratio >= 0.3 ? 3 : (ratio >= 0.12 ? 2 : 1);
+  }
+
   bool _ready = false;
 
   void Function(int popped)? onPop;
@@ -217,7 +264,7 @@ class BubbleGame {
   );
 
   void _generate() {
-    final g = Random(cfg.level * 7919 + 17);
+    final g = Random(cfg.seed ?? cfg.level * 7919 + 17);
     parity = 0;
     grid = List.generate(maxRows, (_) => List<int?>.filled(cols, null));
     final rows = max(1, min(cfg.rows, maxRows - cfg.freeRows));
@@ -260,6 +307,15 @@ class BubbleGame {
         k++;
       }
     }
+    // Altın balonlar (5. bölümden itibaren 1–2 tane)
+    for (var k = 0, tries = 0; k < cfg.goldCount && tries < 50; tries++) {
+      final rr = g.nextInt(rows);
+      final c = g.nextInt(rowLen(rr));
+      if (rr > 0 && isColor(grid[rr][c]) && bubbleCount > 8) {
+        grid[rr][c] = goldCell;
+        k++;
+      }
+    }
     initialCount = bubbleCount;
     // taşlar engel olduğu için az da olsa ek hamle verir
     totalMoves = movesFor(initialCount, cfg) + (stoneCount * 0.12).ceil();
@@ -282,6 +338,10 @@ class BubbleGame {
     comboText = null;
     time = 0;
     impactPos = null;
+    shake = 0;
+    goldPopped = 0;
+    praise = null;
+    wonAt = null;
     _generate();
   }
 
@@ -453,6 +513,12 @@ class BubbleGame {
     dt = min(dt, 1 / 30);
     time += dt;
     impactT += dt;
+    if (shake > 0) shake = max(0, shake - dt);
+    if (praiseT > 0) {
+      praiseT -= dt;
+      if (praiseT <= 0) praise = null;
+    }
+    if (state == GameState.won) wonAt ??= time;
     for (final f in floats) {
       f.t += dt;
     }
@@ -630,6 +696,17 @@ class BubbleGame {
   /// Patlayan bombaların merkezleri ve yaşları (şok dalgası çizimi için).
   final List<(Offset, double)> bombBlasts = [];
 
+  /// Bu bölümde patlatılan altın balon sayısı ve verilen altın bildirimi.
+  int goldPopped = 0;
+  void Function(int coins)? onGold;
+
+  void _awardGold(Offset at) {
+    goldPopped++;
+    floats.add(FloatText(at, '+$goldCoins', 2));
+    onGold?.call(goldCoins);
+    onSfx?.call('coin');
+  }
+
   /// Hücreleri patlatır. Patlayan bir balonun yanındaki bomba balon da
   /// patlar ve iki halkalık alanı temizler (zincirleme olabilir).
   int _pop(Iterable<Cell> cells) {
@@ -651,15 +728,21 @@ class BubbleGame {
         bombs = true;
         bombBlasts.add((cellCenter(a, b), 0));
         queue.addAll(blastArea(a, b));
+      } else if (v == goldCell) {
+        _awardGold(cellCenter(a, b));
       } else {
-        // komşudaki bombayı tetikle
+        // komşudaki bombayı ve altın balonu tetikle
         for (final nb in neighbors(a, b)) {
-          if (grid[nb.$1][nb.$2] == bombCell) queue.add(nb);
+          final w = grid[nb.$1][nb.$2];
+          if (w == bombCell || w == goldCell) queue.add(nb);
         }
       }
       n++;
     }
-    if (bombs) onSfx?.call('bomb');
+    if (bombs) {
+      onSfx?.call('bomb');
+      shake = max(shake, 0.4);
+    }
     if (stones) onSfx?.call('stone');
     return n;
   }
@@ -676,6 +759,7 @@ class BubbleGame {
       for (var b = 0; b < rowLen(a); b++) {
         final v = grid[a][b];
         if (v != null && !anchored.contains((a, b))) {
+          if (v == goldCell) _awardGold(cellCenter(a, b));
           particles.add(
             Particle(
               cellCenter(a, b),
@@ -715,6 +799,20 @@ class BubbleGame {
       }
       onSfx?.call('pop');
       if (dropped > 0) onSfx?.call('drop');
+      final total = popped + dropped;
+      final p =
+          total >= 18
+              ? 'EFSANE!'
+              : total >= 12
+              ? 'MÜKEMMEL!'
+              : total >= 8
+              ? 'HARİKA!'
+              : null;
+      if (p != null) {
+        praise = p;
+        praiseT = 1.2;
+      }
+      if (total >= 10) shake = max(shake, 0.3);
       onPop?.call(popped + dropped);
       onShot?.call(popped, dropped, combo, Map.of(_shotColors));
     } else {

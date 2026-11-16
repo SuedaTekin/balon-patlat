@@ -165,6 +165,27 @@ void main() {
     expect(Progress.claimedAch, contains('pop1k'));
   });
 
+  test('günlük meydan okuma günde bir kez, bölge sandığı bölge bitince', () {
+    expect(Progress.dailyAvailable, isTrue);
+    final coins = Progress.coins;
+    final r = Progress.completeDaily();
+    expect(Progress.coins, coins + r.coins);
+    expect(Progress.dailyAvailable, isFalse);
+
+    Progress.unlocked = 5;
+    expect(Progress.regionChestReady(0), isFalse);
+    Progress.unlocked = 11; // 1–10 bitti
+    expect(Progress.regionChestReady(0), isTrue);
+    expect(Progress.openRegionChest(0), isNotNull);
+    expect(Progress.regionChestReady(0), isFalse);
+    expect(Progress.openRegionChest(0), isNull);
+    final j = Progress.toJson();
+    Progress.resetLocal();
+    Progress.fromJson(j);
+    expect(Progress.regionChests, contains(0));
+    expect(Progress.dailyAvailable, isFalse);
+  });
+
   test('kayıt yeniden yüklenince korunur', () async {
     Progress.coins = 1234;
     Progress.lives = 2;

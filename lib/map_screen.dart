@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'cloud/cloud.dart';
 import 'cloud/leaderboard_tab.dart';
 import 'game.dart';
+import 'level_intro.dart';
+import 'audio.dart';
 import 'progress.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -155,6 +157,7 @@ class _MapTabState extends State<MapTab> {
     return Column(
       children: [
         _regionCard(region),
+        if (Progress.dailyAvailable && Progress.unlocked >= 5) _dailyCard(),
         Expanded(
           child: LayoutBuilder(
             builder: (context, c) {
@@ -270,25 +273,128 @@ class _MapTabState extends State<MapTab> {
     final region = (firstLevel - 1) ~/ levelsPerRegion;
     final y = (a.dy + b.dy) / 2;
     final locked = firstLevel > Progress.unlocked;
+    // biten bölgenin sandığı (önceki bölge)
+    final chest = region - 1;
+    final chestReady = Progress.regionChestReady(chest);
+    final chestOpened = Progress.regionChests.contains(chest);
     return Positioned(
       left: 0,
       right: 0,
-      top: y - 16,
-      child: Center(
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-          decoration: BoxDecoration(
-            color: locked ? LP.surfaceHigh : const Color(0xFF2A1F5C),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: locked ? LP.surfaceHighest : LP.gold,
-              width: 2,
+      top: y - 22,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          if (chestReady || chestOpened) ...[
+            GestureDetector(
+              onTap: chestReady ? () => _openChest(chest) : null,
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: chestReady ? LP.gold : LP.surfaceHigh,
+                  boxShadow: [
+                    if (chestReady)
+                      BoxShadow(
+                        color: LP.gold.withValues(alpha: 0.7),
+                        blurRadius: 18,
+                      ),
+                  ],
+                ),
+                child: Icon(
+                  chestReady ? Icons.redeem_rounded : Icons.check_rounded,
+                  color: chestReady ? const Color(0xFF3D2400) : LP.muted,
+                  size: 26,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              color: locked ? LP.surfaceHigh : const Color(0xFF2A1F5C),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: locked ? LP.surfaceHighest : LP.gold,
+                width: 2,
+              ),
+            ),
+            child: Text(
+              'BÖLGE ${region + 1} · ${regionNames[region % regionNames.length]}',
+              style: outfit(13, color: locked ? LP.muted : LP.gold),
             ),
           ),
-          child: Text(
-            'BÖLGE ${region + 1} · ${regionNames[region % regionNames.length]}',
-            style: outfit(13, color: locked ? LP.muted : LP.gold),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openChest(int region) async {
+    final r = Progress.openRegionChest(region);
+    if (r == null) return;
+    Sfx.play('tier');
+    Sfx.haptic(2);
+    setState(() {});
+    await showRewardDialog(
+      context,
+      'BÖLGE SANDIĞI!',
+      r,
+      subtitle:
+          '${regionNames[region % regionNames.length]} bölgesini tamamladın',
+    );
+  }
+
+  /// Günün meydan okuması kartı (bugün oynanmadıysa).
+  Widget _dailyCard() {
+    return GestureDetector(
+      onTap: () async {
+        await startDaily(context);
+        if (mounted) setState(() {});
+      },
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 4, 16, 2),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(22),
+          gradient: const LinearGradient(
+            colors: [Color(0xFFB45CFF), Color(0xFFFF4E7C)],
           ),
+          boxShadow: const [
+            BoxShadow(color: Color(0xFF5A1F8C), offset: Offset(0, 4)),
+          ],
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.event_available_rounded, color: Colors.white),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'GÜNÜN MEYDAN OKUMASI',
+                    style: outfit(15, w: FontWeight.w900, color: Colors.white),
+                  ),
+                  Text(
+                    'Her gün yeni dizilim · +300 altın ve güçlendirici',
+                    style: jakarta(11, color: Colors.white70),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                'OYNA',
+                style: outfit(14, color: const Color(0xFF5A1F8C)),
+              ),
+            ),
+          ],
         ),
       ),
     );

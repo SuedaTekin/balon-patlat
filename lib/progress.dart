@@ -66,6 +66,53 @@ class Progress {
   static final Map<String, int> stats = {};
   static final Set<String> claimedQuests = {};
 
+  /// Günün meydan okumasının en son bitirildiği gün ve açılan bölge sandıkları.
+  static String dailyDoneDay = '';
+  static final Set<int> regionChests = {};
+
+  static bool get dailyAvailable => dailyDoneDay != todayKey;
+
+  /// Günlük meydan okuma ödülü (haftanın gününe göre güçlendirici değişir).
+  static Reward get dailyReward {
+    const cycle = [Booster.rainbow, Booster.fire, Booster.laser, Booster.moves];
+    return Reward(
+      coins: 300,
+      boosters: {cycle[DateTime.now().weekday % cycle.length]: 1},
+    );
+  }
+
+  /// Günlük meydan okuma kazanıldı: ödülü ver, bilet XP'si ekle.
+  static Reward completeDaily() {
+    final r = dailyReward;
+    dailyDoneDay = todayKey;
+    grant(r);
+    addStat('daily');
+    addPassXp(40);
+    save();
+    return r;
+  }
+
+  /// Bölge sandığı: bölgenin 10 bölümü bitince açılır.
+  static bool regionChestReady(int region) =>
+      unlocked > (region + 1) * 10 && !regionChests.contains(region);
+
+  static Reward regionChestReward(int region) => Reward(
+    coins: 200 + region * 25,
+    boosters: {
+      [Booster.rainbow, Booster.fire, Booster.laser][region % 3]: 1,
+      if (region % 2 == 1) Booster.moves: 1,
+    },
+  );
+
+  static Reward? openRegionChest(int region) {
+    if (!regionChestReady(region)) return null;
+    regionChests.add(region);
+    final r = regionChestReward(region);
+    grant(r);
+    save();
+    return r;
+  }
+
   /// Ömür boyu sayaçlar ve alınmış başarım ödülleri.
   static final Map<String, int> lifetime = {};
   static final Set<String> claimedAch = {};
@@ -141,6 +188,8 @@ class Progress {
     'passSeason': passSeason,
     'passXp': passXp,
     'passGold': passGold,
+    'dailyDoneDay': dailyDoneDay,
+    'regionChests': regionChests.toList(),
     'lifetime': Map.of(lifetime),
     'claimedAch': claimedAch.toList(),
     'passFree': passFreeClaimed.toList(),
@@ -191,6 +240,12 @@ class Progress {
     weeklyScore = i('weeklyScore', 0);
     weeklyStars = i('weeklyStars', 0);
     welcomeGiven = j['welcomeGiven'] as bool? ?? false;
+    dailyDoneDay = s('dailyDoneDay');
+    regionChests
+      ..clear()
+      ..addAll([
+        for (final x in (j['regionChests'] as List? ?? [])) (x as num).toInt(),
+      ]);
     lifetime
       ..clear()
       ..addAll({
