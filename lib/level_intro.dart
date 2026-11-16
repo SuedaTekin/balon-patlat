@@ -409,50 +409,55 @@ class _LevelIntroState extends State<_LevelIntro> {
         Sfx.play('click');
         setState(onTap);
       },
-      child: AnimatedContainer(
+      // altını yetmeyen güçlendirici soluk görünür
+      child: AnimatedOpacity(
         duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.fromLTRB(6, 12, 6, 10),
-        decoration: BoxDecoration(
-          color:
-              on
-                  ? LP.cyan.withValues(alpha: 0.14)
-                  : LP.bgDeep.withValues(alpha: 0.55),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: on ? LP.cyan : LP.surfaceHighest,
-            width: on ? 2.5 : 1.5,
+        opacity: onTap == null ? 0.45 : 1,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.fromLTRB(6, 12, 6, 10),
+          decoration: BoxDecoration(
+            color:
+                on
+                    ? LP.cyan.withValues(alpha: 0.14)
+                    : LP.bgDeep.withValues(alpha: 0.55),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: on ? LP.cyan : LP.surfaceHighest,
+              width: on ? 2.5 : 1.5,
+            ),
           ),
-        ),
-        child: Column(
-          children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                SizedBox(width: 50, height: 50, child: icon),
-                if (on)
-                  const Positioned(
-                    right: -8,
-                    top: -8,
-                    child: CircleAvatar(
-                      radius: 11,
-                      backgroundColor: LP.cyan,
-                      child: Icon(
-                        Icons.check_rounded,
-                        size: 16,
-                        color: Color(0xFF00363D),
+          child: Column(
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  SizedBox(width: 50, height: 50, child: icon),
+                  if (on)
+                    const Positioned(
+                      right: -8,
+                      top: -8,
+                      child: CircleAvatar(
+                        radius: 11,
+                        backgroundColor: LP.cyan,
+                        child: Icon(
+                          Icons.check_rounded,
+                          size: 16,
+                          color: Color(0xFF00363D),
+                        ),
                       ),
                     ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(title, style: outfit(14, w: FontWeight.w900)),
-            ),
-            const SizedBox(height: 2),
-            FittedBox(fit: BoxFit.scaleDown, child: price),
-          ],
+                ],
+              ),
+              const SizedBox(height: 6),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(title, style: outfit(14, w: FontWeight.w900)),
+              ),
+              const SizedBox(height: 2),
+              FittedBox(fit: BoxFit.scaleDown, child: price),
+            ],
+          ),
         ),
       ),
     );
