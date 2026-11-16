@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../progress.dart';
 import '../theme.dart';
 import '../widgets.dart';
 import 'avatar.dart';
@@ -12,8 +13,15 @@ enum _Step { form, code, forgotEmail, forgotCode }
 
 /// Giriş yap / Kayıt ol (misafir hesabına e-posta bağlama) / Şifremi unuttum.
 class AuthScreen extends StatefulWidget {
-  const AuthScreen({super.key, this.mode = AuthMode.register});
+  const AuthScreen({
+    super.key,
+    this.mode = AuthMode.register,
+    this.welcome = false,
+  });
   final AuthMode mode;
+
+  /// İlk açılış karşılama paneli: altta "Misafir Olarak Oyna" çıkar.
+  final bool welcome;
 
   @override
   State<AuthScreen> createState() => _AuthScreenState();
@@ -76,6 +84,90 @@ class _AuthScreenState extends State<AuthScreen> {
       });
     }
   }
+
+  void _google() {
+    _run(() async {
+      final hadWelcome = Progress.welcomeGiven;
+      final ok = await Cloud.signInWithGoogle();
+      if (!ok || !mounted) return;
+      if (!hadWelcome && Progress.welcomeGiven) {
+        await showRewardDialog(
+          context,
+          'HOŞ GELDİN!',
+          welcomeReward,
+          subtitle: 'Google hesabın bağlandı, ilerlemen artık bulutta güvende.',
+        );
+      } else {
+        toast(context, 'Hoş geldin, ${Cloud.me?.username ?? 'oyuncu'}!');
+      }
+      if (mounted) Navigator.pop(context, true);
+    });
+  }
+
+  Widget _googleButton() => _busyOr(
+    GestureDetector(
+      onTap: _google,
+      child: Container(
+        height: 58,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: const [
+            BoxShadow(color: Color(0xFFB9B4CC), offset: Offset(0, 5)),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            ShaderMask(
+              shaderCallback:
+                  (r) => const SweepGradient(
+                    colors: [
+                      Color(0xFFEA4335),
+                      Color(0xFFFBBC05),
+                      Color(0xFF34A853),
+                      Color(0xFF4285F4),
+                      Color(0xFFEA4335),
+                    ],
+                  ).createShader(r),
+              child: Text(
+                'G',
+                style: outfit(28, w: FontWeight.w900, color: Colors.white),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  'Google ile Devam Et',
+                  style: outfit(
+                    19,
+                    w: FontWeight.w900,
+                    color: const Color(0xFF1A0E45),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  Widget _orDivider(String text) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 14),
+    child: Row(
+      children: [
+        const Expanded(child: Divider(color: LP.surfaceHighest)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Text(text, style: outfit(12, color: LP.muted, spacing: 1)),
+        ),
+        const Expanded(child: Divider(color: LP.surfaceHighest)),
+      ],
+    ),
+  );
 
   void _submitCode() {
     if (_code.text.trim().length < 6) {
@@ -236,7 +328,9 @@ class _AuthScreenState extends State<AuthScreen> {
           ],
         ),
       ),
-      const SizedBox(height: 6),
+      const SizedBox(height: 16),
+      _googleButton(),
+      _orDivider('VEYA E-POSTA İLE'),
       _label('E-POSTA ADRESİ'),
       LpField(
         controller: _email,
@@ -277,6 +371,43 @@ class _AuthScreenState extends State<AuthScreen> {
         textAlign: TextAlign.center,
         style: jakarta(12, color: LP.muted),
       ),
+      if (widget.welcome) ...[
+        const SizedBox(height: 18),
+        Center(
+          child: GestureDetector(
+            onTap: () => Navigator.pop(context, false),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              decoration: BoxDecoration(
+                color: LP.bgDeep.withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.bolt_rounded, color: LP.gold),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      'Misafir Olarak Oyna (Hızlı Başla)',
+                      style: outfit(15, color: LP.onSurface),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  const Icon(Icons.arrow_forward_rounded, color: LP.gold),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'İlerlemen bu cihaza kaydedilir; istediğin zaman Profil\'den '
+          'hesap oluşturabilirsin.',
+          textAlign: TextAlign.center,
+          style: jakarta(11, color: LP.muted),
+        ),
+      ],
     ];
   }
 

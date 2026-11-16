@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'cloud/auth_screen.dart';
 import 'cloud/avatar.dart';
 import 'audio.dart';
 import 'cloud/cloud.dart';
@@ -49,6 +51,20 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) _topBarKey.currentState?.refresh();
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeWelcome());
+  }
+
+  /// İlk açılışta giriş paneli: Google / giriş / kayıt / misafir.
+  Future<void> _maybeWelcome() async {
+    if (!Cloud.enabled) return;
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool('welcomeSeen') ?? false) return;
+    await prefs.setBool('welcomeSeen', true);
+    if (!mounted || !Cloud.isGuest) return;
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const AuthScreen(welcome: true)));
+    _refresh();
   }
 
   /// Buluta ilk bağlanınca: arkadaşları al, takımdan gelen canları topla.

@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'achievements.dart';
 import 'game.dart';
 import 'pass_tab.dart';
 import 'progress.dart';
@@ -176,7 +177,7 @@ class _EventsTabState extends State<EventsTab>
                 _segment(
                   1,
                   Icons.task_alt_rounded,
-                  'Görevler',
+                  'Görev',
                   ready > 0 ? '$ready' : null,
                 ),
                 _segment(
@@ -187,6 +188,12 @@ class _EventsTabState extends State<EventsTab>
                       ? '${Progress.passReadyCount}'
                       : null,
                 ),
+                _segment(
+                  3,
+                  Icons.military_tech_rounded,
+                  'Rozet',
+                  achievementsReady > 0 ? '$achievementsReady' : null,
+                ),
               ],
             ),
           ),
@@ -195,7 +202,13 @@ class _EventsTabState extends State<EventsTab>
           child: switch (_page) {
             0 => _spinPage(),
             1 => _questPage(),
-            _ => PassPage(onChanged: widget.onChanged),
+            2 => PassPage(onChanged: widget.onChanged),
+            _ => AchievementsPage(
+              onChanged: () {
+                widget.onChanged();
+                setState(() {});
+              },
+            ),
           },
         ),
       ],

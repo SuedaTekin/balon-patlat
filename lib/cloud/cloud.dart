@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../game.dart';
@@ -283,6 +284,61 @@ class Cloud {
     }
     await syncNow();
     _notify();
+  });
+
+  static bool get googleReady => enabled && googleWebClientId.isNotEmpty;
+
+  static bool get isGoogle =>
+      user?.identities?.any((i) => i.provider == 'google') ?? false;
+
+  /// Google ile devam et. Misafirsen Google hesabın bu misafir hesabına
+  /// bağlanır (ilerleme korunur); Google hesabı zaten kayıtlıysa o hesaba
+  /// geçilir ve buluttaki ilerleme yüklenir. İptal edilirse false döner.
+  static Future<bool> signInWithGoogle() => _guard(() async {
+    if (!googleReady) {
+      throw CloudError('Google ile giriş henüz ayarlanmadı.');
+    }
+    final gs = GoogleSignIn(
+      serverClientId: googleWebClientId,
+      scopes: const ['email'],
+    );
+    await gs.signOut(); // her seferinde hesap seçtir
+    final acc = await gs.signIn();
+    if (acc == null) return false;
+    final auth = await acc.authentication;
+    final idToken = auth.idToken;
+    if (idToken == null) throw CloudError('Google kimliği alınamadı.');
+    await _ensure();
+    if (isGuest) {
+      try {
+        await sb.auth.linkIdentityWithIdToken(
+          provider: OAuthProvider.google,
+          idToken: idToken,
+          accessToken: auth.accessToken,
+        );
+        await sb.auth.refreshSession();
+        await refreshProfile();
+        if (!Progress.welcomeGiven) {
+          Progress.welcomeGiven = true;
+          Progress.grant(welcomeReward);
+        }
+        await syncNow();
+        _notify();
+        return true;
+      } on AuthException catch (e) {
+        final m = e.message.toLowerCase();
+        if (!(m.contains('already') || m.contains('exists'))) rethrow;
+        // bu Google hesabı başka bir oyuncuya ait → o hesaba geç
+      }
+    }
+    await syncNow();
+    await sb.auth.signInWithIdToken(
+      provider: OAuthProvider.google,
+      idToken: idToken,
+      accessToken: auth.accessToken,
+    );
+    await _afterAccountSwitch();
+    return true;
   });
 
   /// Var olan hesaba giriş; buluttaki ilerleme bu cihaza yüklenir.

@@ -66,6 +66,10 @@ class Progress {
   static final Map<String, int> stats = {};
   static final Set<String> claimedQuests = {};
 
+  /// Ömür boyu sayaçlar ve alınmış başarım ödülleri.
+  static final Map<String, int> lifetime = {};
+  static final Set<String> claimedAch = {};
+
   // ---- fiyatlar ----
   static const boosterPrice = 200;
   static const extraMovesPrice = 300;
@@ -128,7 +132,7 @@ class Progress {
     'freeGiftDay': freeGiftDay,
     'starterBought': starterBought,
     'statsDay': statsDay,
-    'stats': stats,
+    'stats': Map.of(stats),
     'claimedQuests': claimedQuests.toList(),
     'weekKey': weekKey,
     'weeklyScore': weeklyScore,
@@ -137,6 +141,8 @@ class Progress {
     'passSeason': passSeason,
     'passXp': passXp,
     'passGold': passGold,
+    'lifetime': Map.of(lifetime),
+    'claimedAch': claimedAch.toList(),
     'passFree': passFreeClaimed.toList(),
     'passGoldClaimed': passGoldClaimed.toList(),
   };
@@ -185,6 +191,15 @@ class Progress {
     weeklyScore = i('weeklyScore', 0);
     weeklyStars = i('weeklyStars', 0);
     welcomeGiven = j['welcomeGiven'] as bool? ?? false;
+    lifetime
+      ..clear()
+      ..addAll({
+        for (final e in (j['lifetime'] as Map? ?? {}).entries)
+          '${e.key}': (e.value as num).toInt(),
+      });
+    claimedAch
+      ..clear()
+      ..addAll([for (final x in (j['claimedAch'] as List? ?? [])) '$x']);
     passSeason = s('passSeason');
     passXp = i('passXp', 0);
     passGold = j['passGold'] as bool? ?? false;
@@ -488,7 +503,13 @@ class Progress {
   static void addStat(String key, [int v = 1]) {
     _rollDay();
     stats[key] = (stats[key] ?? 0) + v;
+    if (!key.startsWith('pop_c') && key != 'ad_coins') {
+      lifetime[key] = (lifetime[key] ?? 0) + v;
+    }
   }
+
+  /// Hiç sıfırlanmayan toplam sayaçlar (başarımlar için).
+  static int life(String key) => lifetime[key] ?? 0;
 
   static int stat(String key) {
     _rollDay();

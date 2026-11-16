@@ -34,7 +34,7 @@ void main() {
     expect(find.text('GÜNLÜK ŞANS ÇARKI'), findsOneWidget);
     expect(find.text('GİRİŞ SERİSİ'), findsOneWidget);
 
-    await t.tap(find.text('Görevler'));
+    await t.tap(find.text('Görev'));
     await t.pump();
     expect(find.text('Günlük Görevler'), findsOneWidget);
 
@@ -60,9 +60,21 @@ void main() {
     await t.pump();
     expect(find.text('Çevrimiçi özellikler kapalı'), findsOneWidget);
 
-    await t.pumpWidget(const MaterialApp(home: AuthScreen()));
+    await t.pumpWidget(
+      MaterialApp(key: UniqueKey(), home: const AuthScreen(welcome: true)),
+    );
     await t.pump();
     expect(find.text('Hoş Geldin Paketi!'), findsOneWidget);
+    expect(find.text('Google ile Devam Et'), findsOneWidget);
+    expect(find.text('VEYA E-POSTA İLE'), findsOneWidget);
+    final list = find.byType(Scrollable).first;
+    await t.scrollUntilVisible(
+      find.text('Misafir Olarak Oyna (Hızlı Başla)'),
+      200,
+      scrollable: list,
+    );
+    expect(find.text('Misafir Olarak Oyna (Hızlı Başla)'), findsOneWidget);
+    await t.scrollUntilVisible(find.text('GİRİŞ YAP'), -200, scrollable: list);
     await t.tap(find.text('GİRİŞ YAP'));
     await t.pump();
     expect(find.text('Şifremi Unuttum?'), findsOneWidget);
@@ -105,6 +117,9 @@ void main() {
     await t.tap(find.text('Bilet'));
     await t.pump();
     expect(find.text('ALTIN BİLET'), findsOneWidget);
+    await t.tap(find.text('Rozet'));
+    await t.pump();
+    expect(find.text('Başarımlar'), findsOneWidget);
   });
 
   testWidgets('can bitince oyna penceresi açılır', (t) async {

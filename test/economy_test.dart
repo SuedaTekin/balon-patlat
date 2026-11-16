@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:balon_patlat/achievements.dart';
 import 'package:balon_patlat/events_tab.dart';
 import 'package:balon_patlat/game.dart';
 import 'package:balon_patlat/progress.dart';
@@ -144,6 +145,24 @@ void main() {
     Progress.passSeason = '2000-01';
     expect(Progress.passTier, 0);
     expect(Progress.passGold, isFalse);
+  });
+
+  test('başarımlar: ömür boyu sayaç, hazır olma ve kayıt', () {
+    final pop = achievements.firstWhere((a) => a.id == 'pop1k');
+    expect(pop.ready, isFalse);
+    Progress.addStat('pop', 600);
+    Progress.addStat('pop', 500);
+    expect(Progress.life('pop'), 1100);
+    expect(pop.ready, isTrue);
+    expect(achievementsReady, greaterThan(0));
+    Progress.claimedAch.add(pop.id);
+    expect(pop.ready, isFalse);
+    final j = Progress.toJson();
+    Progress.resetLocal();
+    expect(Progress.life('pop'), 0);
+    Progress.fromJson(j);
+    expect(Progress.life('pop'), 1100);
+    expect(Progress.claimedAch, contains('pop1k'));
   });
 
   test('kayıt yeniden yüklenince korunur', () async {

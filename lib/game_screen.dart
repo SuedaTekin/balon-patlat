@@ -55,6 +55,7 @@ class _GameScreenState extends State<GameScreen>
     game = BubbleGame(LevelConfig.forLevel(widget.level));
     game.onPop = (n) => Sfx.haptic(n >= 6 ? 2 : 1);
     game.onSfx = (e) {
+      if (e == 'bomb') Progress.addStat('bomb');
       if (e == 'pop') {
         Sfx.pop(game.combo);
       } else {
