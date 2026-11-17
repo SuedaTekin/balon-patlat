@@ -119,6 +119,10 @@ class _GameScreenState extends State<GameScreen>
       Progress.addStat('gold');
     };
     game.onPop = (n) => Sfx.haptic(n >= 6 ? 2 : 1);
+    game.onChick = () {
+      Progress.addStat('chick');
+      Sfx.haptic(2);
+    };
     game.onSfx = (e) {
       if (e == 'bomb') Progress.addStat('bomb');
       if (e == 'pop') {
@@ -191,6 +195,14 @@ class _GameScreenState extends State<GameScreen>
         'YENİ: BUKALEMUN BALON',
         'Her atıştan sonra renk değiştirir. Doğru anı kolla!',
         const Color(0xFFFF8FD8),
+      );
+    }
+    if (cfg.rescue) {
+      return (
+        level == 18 ? 'YENİ: YAVRU KURTARMA' : 'KURTARMA BÖLÜMÜ',
+        '${cfg.chickCount} yavru balonlara hapsolmuş! Yanlarındaki balonu '
+            'patlat ya da düşür. Tüm ızgarayı temizlemen gerekmez!',
+        const Color(0xFFFFD83D),
       );
     }
     if (level == 40) {
@@ -677,7 +689,7 @@ class _GameScreenState extends State<GameScreen>
           ? (Progress.endlessBest == 0
               ? 1.0
               : (game.score / Progress.endlessBest).clamp(0.0, 1.0))
-          : game.cleared;
+          : game.goalProgress;
 
   Widget _hud() {
     final low = !widget.endless && game.movesLeft <= 5;
@@ -723,7 +735,9 @@ class _GameScreenState extends State<GameScreen>
                     color: kindColor(game.cfg.kind),
                   ),
                   child: Icon(
-                    game.cfg.kind == LevelKind.normal
+                    game.cfg.rescue
+                        ? Icons.egg_rounded
+                        : game.cfg.kind == LevelKind.normal
                         ? Icons.flag_rounded
                         : Icons.local_fire_department_rounded,
                     color:
@@ -827,6 +841,8 @@ class _GameScreenState extends State<GameScreen>
                           ? (Progress.endlessBest == 0
                               ? 'İLK REKORUNU YAP!'
                               : 'REKOR ${formatNum(Progress.endlessBest)}')
+                          : game.cfg.rescue
+                          ? 'YAVRU ${game.chicksSaved}/${game.chickTotal}'
                           : '%${(game.cleared * 100).round()}',
                       style: outfit(9, color: Colors.white, spacing: 0.5),
                     ),
@@ -1273,6 +1289,29 @@ class _GameScreenState extends State<GameScreen>
                 ),
               ],
             ),
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Progress.starChestReady
+                      ? Icons.redeem_rounded
+                      : Icons.inventory_2_rounded,
+                  color: LP.goldLight,
+                  size: 18,
+                ),
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    Progress.starChestReady
+                        ? 'Yıldız Sandığı HAZIR! Haritada aç'
+                        : 'Yıldız Sandığı '
+                            '${Progress.starChest}/${Progress.starChestGoal}',
+                    style: outfit(13, color: LP.goldLight),
+                  ),
+                ),
+              ],
+            ),
           ],
           if (!_adDoubled && _reward > 0) ...[
             const SizedBox(height: 10),
@@ -1326,7 +1365,7 @@ class _GameScreenState extends State<GameScreen>
 
   Widget _defeat() {
     final danger = game.state == GameState.lostDanger;
-    final pct = (game.cleared * 100).round();
+    final pct = (game.goalProgress * 100).round();
     final price = danger ? Progress.rescuePrice : Progress.extraMovesPrice;
     return _Backdrop(
       child: Column(
@@ -1366,7 +1405,9 @@ class _GameScreenState extends State<GameScreen>
                     Flexible(
                       child: FittedBox(
                         child: Text(
-                          '%$pct TEMİZLENDİ',
+                          game.cfg.rescue
+                              ? '${game.chicksSaved}/${game.chickTotal} YAVRU'
+                              : '%$pct TEMİZLENDİ',
                           style: outfit(14, color: LP.gold),
                         ),
                       ),
@@ -1381,7 +1422,7 @@ class _GameScreenState extends State<GameScreen>
                     color: LP.surfaceHighest,
                     alignment: Alignment.centerLeft,
                     child: FractionallySizedBox(
-                      widthFactor: max(0.03, game.cleared),
+                      widthFactor: max(0.03, game.goalProgress),
                       child: Container(
                         decoration: const BoxDecoration(
                           gradient: LinearGradient(
@@ -1570,15 +1611,14 @@ class _GameScreenState extends State<GameScreen>
   Widget _endlessOver() {
     final record = game.score > Progress.endlessBest;
     final coins = min(100, game.score ~/ 200);
-    Widget stat(IconData icon, Color color, String label, String value) =>
-        Row(
-          children: [
-            Icon(icon, color: color, size: 22),
-            const SizedBox(width: 8),
-            Expanded(child: Text(label, style: outfit(15))),
-            Text(value, style: outfit(18, w: FontWeight.w900, color: color)),
-          ],
-        );
+    Widget stat(IconData icon, Color color, String label, String value) => Row(
+      children: [
+        Icon(icon, color: color, size: 22),
+        const SizedBox(width: 8),
+        Expanded(child: Text(label, style: outfit(15))),
+        Text(value, style: outfit(18, w: FontWeight.w900, color: color)),
+      ],
+    );
     return _Backdrop(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -2058,6 +2098,178 @@ class GamePainter extends CustomPainter {
     );
   }
 
+  /// Civciv: sarı tüylü gövde, turuncu gaga, göz ve kanat. [flap] 0–1 kanat
+  /// açısı (uçarken çırpar).
+  static void drawChickBird(
+    Canvas canvas,
+    Offset c,
+    double radius, {
+    double flap = 0,
+    bool happy = false,
+  }) {
+    const body = Color(0xFFFFD83D);
+    const shade = Color(0xFFF2A900);
+    // kanatlar (arkada)
+    final wing = Paint()..color = shade;
+    for (final s in [-1.0, 1.0]) {
+      canvas.save();
+      canvas.translate(c.dx + s * radius * 0.62, c.dy + radius * 0.1);
+      canvas.rotate(-s * (0.3 + flap * 0.9));
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset(s * radius * 0.18, 0),
+          width: radius * 0.62,
+          height: radius * 0.4,
+        ),
+        wing,
+      );
+      canvas.restore();
+    }
+    // gövde ve tepe tüyü
+    canvas.drawCircle(
+      c,
+      radius * 0.72,
+      Paint()
+        ..shader = const RadialGradient(
+          center: Alignment(-0.3, -0.4),
+          colors: [Color(0xFFFFF4B0), body, shade],
+          stops: [0, 0.6, 1],
+        ).createShader(Rect.fromCircle(center: c, radius: radius * 0.72)),
+    );
+    canvas.drawArc(
+      Rect.fromCenter(
+        center: c + Offset(-radius * 0.05, -radius * 0.82),
+        width: radius * 0.3,
+        height: radius * 0.3,
+      ),
+      0.4,
+      2.4,
+      false,
+      Paint()
+        ..color = shade
+        ..strokeWidth = radius * 0.09
+        ..strokeCap = StrokeCap.round
+        ..style = PaintingStyle.stroke,
+    );
+    // gözler
+    const ink = Color(0xFF3A2400);
+    for (final s in [-1.0, 1.0]) {
+      final e = c + Offset(s * radius * 0.25, -radius * 0.15);
+      if (happy) {
+        canvas.drawArc(
+          Rect.fromCenter(center: e, width: radius * 0.2, height: radius * 0.2),
+          pi,
+          pi,
+          false,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = radius * 0.07
+            ..strokeCap = StrokeCap.round
+            ..color = ink,
+        );
+      } else {
+        canvas.drawCircle(e, radius * 0.1, Paint()..color = ink);
+        canvas.drawCircle(
+          e + Offset(-radius * 0.03, -radius * 0.03),
+          radius * 0.035,
+          Paint()..color = Colors.white,
+        );
+      }
+    }
+    // yanaklar
+    final blush =
+        Paint()..color = const Color(0xFFFF8FA8).withValues(alpha: 0.7);
+    for (final s in [-1.0, 1.0]) {
+      canvas.drawCircle(
+        c + Offset(s * radius * 0.42, radius * 0.08),
+        radius * 0.09,
+        blush,
+      );
+    }
+    // gaga
+    final beak =
+        Path()
+          ..moveTo(c.dx - radius * 0.13, c.dy + radius * 0.02)
+          ..lineTo(c.dx + radius * 0.13, c.dy + radius * 0.02)
+          ..lineTo(c.dx, c.dy + radius * 0.22)
+          ..close();
+    canvas.drawPath(beak, Paint()..color = const Color(0xFFFF7A1A));
+  }
+
+  /// Kalp (kurtulan yavrunun bıraktığı).
+  static void drawHeart(Canvas canvas, Offset c, double size, Color color) {
+    final path =
+        Path()
+          ..moveTo(c.dx, c.dy + size * 0.35)
+          ..cubicTo(
+            c.dx - size * 0.9,
+            c.dy - size * 0.2,
+            c.dx - size * 0.35,
+            c.dy - size * 0.75,
+            c.dx,
+            c.dy - size * 0.3,
+          )
+          ..cubicTo(
+            c.dx + size * 0.35,
+            c.dy - size * 0.75,
+            c.dx + size * 0.9,
+            c.dy - size * 0.2,
+            c.dx,
+            c.dy + size * 0.35,
+          )
+          ..close();
+    canvas.drawPath(path, Paint()..color = color);
+  }
+
+  /// Yavru balon: içinde civciv olan cam balon; hafifçe sallanır.
+  static void drawChick(
+    Canvas canvas,
+    Offset c,
+    double radius, [
+    double t = 0,
+  ]) {
+    canvas.drawCircle(
+      c,
+      radius * 1.12,
+      Paint()
+        ..color = const Color(
+          0xFFFFE680,
+        ).withValues(alpha: 0.35 + 0.15 * sin(t * 3))
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, radius * 0.35),
+    );
+    canvas.drawCircle(
+      c,
+      radius,
+      Paint()..color = const Color(0xFF8FE3FF).withValues(alpha: 0.28),
+    );
+    drawChickBird(
+      canvas,
+      c + Offset(0, sin(t * 2.4) * radius * 0.05),
+      radius * 0.9,
+      flap: (sin(t * 5) * 0.5 + 0.5) * 0.25,
+    );
+    // cam kenarı ve parıltı
+    canvas.drawCircle(
+      c,
+      radius * 0.97,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = radius * 0.1
+        ..color = Colors.white.withValues(alpha: 0.75),
+    );
+    canvas.drawArc(
+      Rect.fromCircle(center: c, radius: radius * 0.75),
+      pi * 1.1,
+      pi * 0.35,
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = radius * 0.12
+        ..strokeCap = StrokeCap.round
+        ..color = Colors.white.withValues(alpha: 0.85),
+    );
+  }
+
   /// Altın balon: parlayan altın gövde, ortada para simgesi, yıldız parıltısı.
   static void drawGold(Canvas canvas, Offset c, double radius, [double t = 0]) {
     canvas.drawCircle(
@@ -2162,15 +2374,18 @@ class GamePainter extends CustomPainter {
         Paint()
           ..strokeWidth = radius * 0.22
           ..strokeCap = StrokeCap.round
-          ..color = Colors.white.withValues(
-            alpha: 0.55 * sin(k / 0.4 * pi),
-          ),
+          ..color = Colors.white.withValues(alpha: 0.55 * sin(k / 0.4 * pi)),
       );
     }
   }
 
   /// Virüs balon: zehir yeşili, nabız atan dikenli gövde ve kızgın yüz.
-  static void drawVirus(Canvas canvas, Offset c, double radius, [double t = 0]) {
+  static void drawVirus(
+    Canvas canvas,
+    Offset c,
+    double radius, [
+    double t = 0,
+  ]) {
     const body = Color(0xFF5BE04A);
     final pulse = 1 + 0.05 * sin(t * 6);
     canvas.drawCircle(
@@ -2197,8 +2412,16 @@ class GamePainter extends CustomPainter {
     drawBubble(canvas, c, radius * 0.82 * pulse, body, glow: false);
     // benekler
     final dot = Paint()..color = const Color(0xFF2E9E2A).withValues(alpha: 0.8);
-    canvas.drawCircle(c + Offset(-radius * 0.38, radius * 0.3), radius * 0.1, dot);
-    canvas.drawCircle(c + Offset(radius * 0.42, radius * 0.22), radius * 0.08, dot);
+    canvas.drawCircle(
+      c + Offset(-radius * 0.38, radius * 0.3),
+      radius * 0.1,
+      dot,
+    );
+    canvas.drawCircle(
+      c + Offset(radius * 0.42, radius * 0.22),
+      radius * 0.08,
+      dot,
+    );
     // kızgın gözler
     final eye = Paint()..color = const Color(0xFF14320F);
     for (final s in [-1.0, 1.0]) {
@@ -2404,9 +2627,7 @@ class GamePainter extends CustomPainter {
         Offset(x, y),
         rad,
         Paint()
-          ..color = theme.bokeh[i % theme.bokeh.length].withValues(
-            alpha: 0.08,
-          ),
+          ..color = theme.bokeh[i % theme.bokeh.length].withValues(alpha: 0.08),
       );
       canvas.drawCircle(
         Offset(x - rad * 0.3, y - rad * 0.3),
@@ -2509,6 +2730,8 @@ class GamePainter extends CustomPainter {
           drawGold(canvas, p, r * 0.93, g.time + row * 0.7 + c);
         } else if (v == virusCell) {
           drawVirus(canvas, p, r * 0.93, g.time + row * 0.5 + c * 0.3);
+        } else if (v == chickCell) {
+          drawChick(canvas, p, r * 0.93, g.time + row * 0.6 + c * 0.4);
         } else if (isCham(v)) {
           drawCham(
             canvas,
@@ -2582,6 +2805,29 @@ class GamePainter extends CustomPainter {
           );
         }
       }
+    }
+
+    // kurtulan yavrular: kalp bırakarak yukarı uçar
+    for (final (c, t) in g.flyingChicks) {
+      final k = (t / 1.6).clamp(0.0, 1.0);
+      final pos = c + Offset(sin(t * 5) * r * 0.8, -k * k * (c.dy + r * 4));
+      drawHeart(
+        canvas,
+        c + Offset(0, -r * 1.6 - k * r * 2.5),
+        r * (0.6 + k * 0.4),
+        const Color(0xFFFF5C93).withValues(alpha: 1 - k),
+      );
+      canvas.save();
+      canvas.translate(pos.dx, pos.dy);
+      canvas.scale(1 + 0.3 * sin(min(1.0, t * 3) * pi / 2));
+      drawChickBird(
+        canvas,
+        Offset.zero,
+        r * 0.95,
+        flap: sin(t * 28) * 0.5 + 0.5,
+        happy: true,
+      );
+      canvas.restore();
     }
 
     // bomba şok dalgaları

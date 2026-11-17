@@ -423,10 +423,16 @@ class _LevelIntroState extends State<_LevelIntro> {
     spacing: 8,
     runSpacing: 8,
     children: [
-      _chip(
-        const Icon(Icons.bubble_chart_rounded, color: LP.cyan, size: 20),
-        'Tüm renkli balonları patlat',
-      ),
+      if (cfg.rescue)
+        _chip(
+          const Icon(Icons.egg_rounded, color: Color(0xFFFFD83D), size: 20),
+          '${cfg.chickCount} yavruyu kurtar',
+        )
+      else
+        _chip(
+          const Icon(Icons.bubble_chart_rounded, color: LP.cyan, size: 20),
+          'Tüm renkli balonları patlat',
+        ),
       _chip(
         const Icon(Icons.palette_rounded, color: LP.pink, size: 20),
         '${cfg.colors} renk',
@@ -451,11 +457,7 @@ class _LevelIntroState extends State<_LevelIntro> {
         ),
       if (cfg.iceCount > 0)
         _chip(
-          const Icon(
-            Icons.ac_unit_rounded,
-            color: Color(0xFF8FE3FF),
-            size: 20,
-          ),
+          const Icon(Icons.ac_unit_rounded, color: Color(0xFF8FE3FF), size: 20),
           '${cfg.iceCount} buz balon',
         ),
       if (cfg.virusCount > 0)

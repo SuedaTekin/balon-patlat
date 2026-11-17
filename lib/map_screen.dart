@@ -265,6 +265,8 @@ class _MapTabState extends State<MapTab> {
               ),
             ],
           ),
+          const SizedBox(width: 10),
+          _starChestButton(),
         ],
       ),
     );
@@ -329,6 +331,105 @@ class _MapTabState extends State<MapTab> {
           ),
         ],
       ),
+    );
+  }
+
+  /// Yıldız sandığı: yeni yıldızlarla dolar, dolunca parlar ve açılır.
+  Widget _starChestButton() {
+    final ready = Progress.starChestReady;
+    final fill = (Progress.starChest / Progress.starChestGoal).clamp(0.0, 1.0);
+    return GestureDetector(
+      onTap: _openStarChest,
+      child: TweenAnimationBuilder<double>(
+        key: ValueKey(ready),
+        tween: Tween(begin: 0, end: 1),
+        duration: const Duration(milliseconds: 900),
+        curve: Curves.elasticOut,
+        builder:
+            (context, k, child) =>
+                Transform.scale(scale: ready ? 0.8 + 0.2 * k : 1, child: child),
+        child: SizedBox(
+          width: 54,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors:
+                        ready
+                            ? const [Color(0xFFFFE27A), Color(0xFFFF9F1A)]
+                            : [LP.surfaceHighest, LP.surfaceHigh],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
+                  boxShadow: [
+                    if (ready)
+                      BoxShadow(
+                        color: LP.gold.withValues(alpha: 0.7),
+                        blurRadius: 18,
+                      ),
+                  ],
+                ),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    SizedBox(
+                      width: 46,
+                      height: 46,
+                      child: CircularProgressIndicator(
+                        value: fill,
+                        strokeWidth: 3.5,
+                        color: LP.gold,
+                        backgroundColor: LP.bgDeep.withValues(alpha: 0.5),
+                      ),
+                    ),
+                    Icon(
+                      ready ? Icons.redeem_rounded : Icons.inventory_2_rounded,
+                      color: ready ? const Color(0xFF5A2E00) : LP.gold,
+                      size: 24,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 3),
+              FittedBox(
+                child: Text(
+                  ready
+                      ? 'AÇ!'
+                      : '${min(Progress.starChest, Progress.starChestGoal)}/${Progress.starChestGoal}',
+                  style: outfit(11, color: LP.gold, w: FontWeight.w800),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openStarChest() async {
+    if (!Progress.starChestReady) {
+      toast(
+        context,
+        'Yıldız Sandığı: ${Progress.starChestGoal} yeni yıldız topla, '
+        'sandığı aç! (${Progress.starChest}/${Progress.starChestGoal})',
+      );
+      return;
+    }
+    final r = Progress.openStarChest();
+    if (r == null) return;
+    Sfx.play('tier');
+    Sfx.haptic(2);
+    setState(() {});
+    await showRewardDialog(
+      context,
+      'YILDIZ SANDIĞI!',
+      r,
+      subtitle: '${Progress.starChestGoal} yıldız topladın',
     );
   }
 

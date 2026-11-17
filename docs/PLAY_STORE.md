@@ -16,6 +16,12 @@ Balon Patlat; nişan al, at ve aynı renkten en az 3 balonu birleştirip patlat!
 ⭐ 300 BÖLÜM, 30 BÖLGE
 Şeker Vadisi'nden Balon Tahtı'na uzanan haritada her bölge yeni bir macera. Bölümler ilerledikçe zorlaşır: daha fazla renk, daha az hamle, aşağı inen sıralar ve patlamayan taş balonlar!
 
+🐣 YAVRU KURTARMA BÖLÜMLERİ
+Balonlara hapsolmuş sevimli yavruları kurtar! Yanlarındaki balonları patlat ya da düşür, hepsi uçup gitsin.
+
+🎁 YILDIZ SANDIĞI
+Her yeni yıldız sandığı doldurur; 20 yıldızda aç, altın, güçlendirici ve sonsuz can kazan.
+
 🔥 ZOR VE ÇOK ZOR BÖLÜMLER
 Cesaretini sına, ekstra altını kap.
 

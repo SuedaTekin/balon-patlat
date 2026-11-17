@@ -218,6 +218,8 @@ class Progress {
     'passGold': passGold,
     'winStreak': winStreak,
     'piggy': piggy,
+    'starChest': starChest,
+    'starChestsOpened': starChestsOpened,
     'noAds': noAds,
     'winsSinceAd': winsSinceAd,
     'endlessBest': endlessBest,
@@ -279,6 +281,8 @@ class Progress {
     welcomeGiven = j['welcomeGiven'] as bool? ?? false;
     winStreak = i('winStreak', 0);
     piggy = i('piggy', 0);
+    starChest = i('starChest', 0);
+    starChestsOpened = i('starChestsOpened', 0);
     noAds = j['noAds'] as bool? ?? false;
     winsSinceAd = i('winsSinceAd', 0);
     endlessBest = i('endlessBest', 0);
@@ -445,6 +449,8 @@ class Progress {
   /// Bölüm kazanıldığında çağrılır; kazanılan altını döndürür.
   static int recordWin(int level, int starCount, int score) {
     final firstTime = !stars.containsKey(level);
+    // yıldız sandığı: sadece yeni kazanılan yıldızlar sayılır
+    starChest += max(0, starCount - (stars[level] ?? 0));
     stars[level] = max(stars[level] ?? 0, starCount);
     bestScores[level] = max(bestScores[level] ?? 0, score);
     if (level >= unlocked) unlocked = min(level + 1, maxLevel);
@@ -464,6 +470,38 @@ class Progress {
     winsSinceAd++;
     save();
     return reward;
+  }
+
+  // ---------------- yıldız sandığı ----------------
+  /// Bölümlerde yeni kazanılan yıldızlar birikir; [starChestGoal] yıldızda
+  /// sandık açılır (her açılışta ödül biraz büyür).
+  static int starChest = 0, starChestsOpened = 0;
+  static const starChestGoal = 20;
+  static bool get starChestReady => starChest >= starChestGoal;
+
+  static Reward get starChestReward {
+    final n = starChestsOpened;
+    const cycle = [Booster.rainbow, Booster.fire, Booster.laser, Booster.moves];
+    return Reward(
+      coins: 250 + min(250, n * 25),
+      boosters: {
+        cycle[n % cycle.length]: 1,
+        if (n % 2 == 1) cycle[(n + 1) % cycle.length]: 1,
+      },
+      // her üçüncü sandıkta 30 dakika sonsuz can
+      infiniteMinutes: n % 3 == 2 ? 30 : 0,
+    );
+  }
+
+  static Reward? openStarChest() {
+    if (!starChestReady) return null;
+    final r = starChestReward;
+    starChest -= starChestGoal;
+    starChestsOpened++;
+    grant(r);
+    addStat('starchest');
+    save();
+    return r;
   }
 
   // ---------------- kumbara ----------------

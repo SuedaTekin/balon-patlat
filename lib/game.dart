@@ -69,12 +69,16 @@ const int virusCell = 96;
 const int chamBase = 70;
 bool isCham(int? v) => v != null && v >= chamBase && v < chamBase + 6;
 
+/// Yavru balon: içinde hapsolmuş bir civciv var. Yanındaki bir balon
+/// patlayınca, düştüğünde ya da Ateş/Lazer/Bomba değince kurtulup uçar.
+/// Kurtarma bölümlerinde hedef tüm yavruları kurtarmaktır.
+const int chickCell = 95;
+
 /// Temizlenmesi gereken (renkli, buzlu, bukalemun ya da virüs) balon mu?
 bool isTarget(int? v) => isColor(v) || isIce(v) || isCham(v) || v == virusCell;
 
 /// Eşleşmede kullanılan renk (renkli ve bukalemun), yoksa -1.
-int matchColor(int? v) =>
-    isColor(v) ? v! : (isCham(v) ? v! - chamBase : -1);
+int matchColor(int? v) => isColor(v) ? v! : (isCham(v) ? v! - chamBase : -1);
 
 /// Parçacık/çizim için hücre değerinin görünen rengi (buz/bukalemun → kendi
 /// rengi; özel balonlar kendi değeriyle kalır).
@@ -201,6 +205,19 @@ class LevelConfig {
   /// Bukalemun balon sayısı (100. bölümden itibaren 2–6).
   int get chamCount => level < 100 ? 0 : min(6, 2 + (level - 100) ~/ 100);
 
+  /// Kurtarma bölümü: hedef balonları temizlemek değil, ızgaranın üst
+  /// kısmında hapsolmuş yavruları kurtarmak (18. bölümden itibaren, 6'nın
+  /// katı olan normal bölümler; günlük ve sonsuz modda yok).
+  bool get rescue =>
+      seed == null &&
+      !endless &&
+      level >= 18 &&
+      level % 6 == 0 &&
+      kind == LevelKind.normal;
+
+  /// Kurtarma bölümündeki yavru sayısı (3–5).
+  int get chickCount => rescue ? min(5, 3 + (level - 18) ~/ 150) : 0;
+
   /// Tehlike çizgisinin üstünde boş bırakılan sıra sayısı.
   int get freeRows => level < 10 ? 7 : 6;
 
@@ -309,8 +326,7 @@ class BubbleGame {
       cfg.endless ? max(3, 6 - rowsAdded ~/ 10) : cfg.shotsPerRow;
 
   /// Sonsuz modda o an kullanılan renk sayısı (5'ten 6'ya çıkar).
-  int get colorsNow =>
-      cfg.endless ? min(6, 5 + rowsAdded ~/ 20) : cfg.colors;
+  int get colorsNow => cfg.endless ? min(6, 5 + rowsAdded ~/ 20) : cfg.colors;
 
   /// Atıcı bölgesinin ölçeği (halka, sıradaki balon, takas): toplar
   /// küçülse de parmakla rahat kullanılsın diye eski boyutta kalır.
@@ -321,6 +337,18 @@ class BubbleGame {
   /// Renkli ve buzlu (temizlenmesi gereken) balon sayısı.
   int get bubbleCount =>
       grid.fold(0, (s, row) => s + row.where(isTarget).length);
+
+  /// Kurtarma bölümü: toplam ve kurtarılan yavru sayısı.
+  int chickTotal = 0, chicksSaved = 0;
+  int get chicksLeft =>
+      grid.fold(0, (s, row) => s + row.where((v) => v == chickCell).length);
+
+  /// Kurtulup uçan yavrular (konum, yaş) — çizim için.
+  final List<(Offset, double)> flyingChicks = [];
+
+  /// Üst çubuktaki hedef ilerlemesi (kurtarma bölümünde yavrular).
+  double get goalProgress =>
+      cfg.rescue ? (chickTotal == 0 ? 1.0 : chicksSaved / chickTotal) : cleared;
 
   int get iceLeft => grid.fold(0, (s, row) => s + row.where(isIce).length);
 
@@ -444,12 +472,34 @@ class BubbleGame {
         cham++;
       }
     }
+    // Yavrular: en üst üç sırada, sütunlara yayılmış (kazmak gerekir).
+    var chicks = 0;
+    final nCh = cfg.chickCount;
+    for (var k = 0; k < nCh; k++) {
+      for (var tries = 0; tries < 30; tries++) {
+        final rr = g.nextInt(min(3, rows));
+        final span = rowLen(rr) / nCh;
+        final c = min(
+          rowLen(rr) - 1,
+          (span * k + g.nextDouble() * span).floor(),
+        );
+        if (isColor(grid[rr][c])) {
+          grid[rr][c] = chickCell;
+          chicks++;
+          break;
+        }
+      }
+    }
+    chickTotal = chicks;
+    chicksSaved = 0;
     initialCount = bubbleCount;
     // engeller az da olsa ek hamle verir
     totalMoves =
         movesFor(initialCount, cfg) +
         (stoneCount * 0.12).ceil() +
         (ice * 0.5 + virus * 0.5 + cham * 0.25).ceil();
+    // kurtarma bölümünde tüm ızgarayı temizlemek gerekmez: daha az hamle
+    if (cfg.rescue) totalMoves = max(15, (totalMoves * 0.42).ceil());
     if (cfg.endless) totalMoves = 1; // hamle sınırı yok
     movesLeft = totalMoves;
     current = pickColor();
@@ -475,6 +525,7 @@ class BubbleGame {
     iceBroken = 0;
     virusKilled = 0;
     rowsAdded = 0;
+    flyingChicks.clear();
     hintAngle = null;
     fever = 0;
     superShots = 0;
@@ -507,7 +558,9 @@ class BubbleGame {
       ..totalMoves = totalMoves
       ..initialCount = initialCount
       ..missCount = missCount
-      ..rowsAdded = rowsAdded;
+      ..rowsAdded = rowsAdded
+      ..chickTotal = chickTotal
+      ..chicksSaved = chicksSaved;
   }
 
   /// İpucu: sıradaki topla en çok balon eksilten nişan açısını bulur
@@ -530,7 +583,10 @@ class BubbleGame {
       // patlayan/düşen balonlar + kırılan buzlar (yarım puan);
       // ortaya yakın açılar eşitlikte tercih edilir
       final val =
-          gained + s.iceBroken * 0.5 - (a + pi / 2).abs() * 0.01;
+          gained +
+          s.iceBroken * 0.5 +
+          (s.chicksSaved - chicksSaved) * 4 -
+          (a + pi / 2).abs() * 0.01;
       if (val > bestVal) {
         bestVal = val;
         best = a;
@@ -701,6 +757,10 @@ class BubbleGame {
       bombBlasts[i] = (bombBlasts[i].$1, bombBlasts[i].$2 + dt);
     }
     bombBlasts.removeWhere((b) => b.$2 > 0.45);
+    for (var i = 0; i < flyingChicks.length; i++) {
+      flyingChicks[i] = (flyingChicks[i].$1, flyingChicks[i].$2 + dt);
+    }
+    flyingChicks.removeWhere((f) => f.$2 > 1.6);
     for (final p in particles) {
       p.t += dt;
       if (p.falling) {
@@ -904,7 +964,9 @@ class BubbleGame {
         if (isIce(w)) {
           grid[nb.$1][nb.$2] = w! - iceBase;
           // buz kırıntısı: beyaz halka efekti
-          particles.add(Particle(cellCenter(nb.$1, nb.$2), Offset.zero, -1, false));
+          particles.add(
+            Particle(cellCenter(nb.$1, nb.$2), Offset.zero, -1, false),
+          );
           n++;
         }
       }
@@ -936,6 +998,18 @@ class BubbleGame {
   int goldPopped = 0;
   void Function(int coins)? onGold;
 
+  void Function()? onChick;
+
+  /// Yavru kurtuldu: uçarak gider, puan verir.
+  void _saveChick(Offset at) {
+    chicksSaved++;
+    score += 250;
+    flyingChicks.add((at, 0));
+    floats.add(FloatText(at, 'KURTARILDI!', 2));
+    onChick?.call();
+    onSfx?.call('chick');
+  }
+
   void _awardGold(Offset at) {
     goldPopped++;
     floats.add(FloatText(at, '+$goldCoins', 2));
@@ -954,8 +1028,14 @@ class BubbleGame {
       final (a, b) = queue[i];
       final v = grid[a][b];
       if (v == null) continue;
-      particles.add(Particle(cellCenter(a, b), Offset.zero, shownColor(v), false));
       grid[a][b] = null;
+      if (v == chickCell) {
+        _saveChick(cellCenter(a, b));
+        continue; // yavru patlamaz, komşularını tetiklemez
+      }
+      particles.add(
+        Particle(cellCenter(a, b), Offset.zero, shownColor(v), false),
+      );
       popped.add((a, b));
       if (v == virusCell) {
         virusKilled++;
@@ -976,7 +1056,12 @@ class BubbleGame {
         // komşudaki bombayı, altın balonu ve virüsü tetikle
         for (final nb in neighbors(a, b)) {
           final w = grid[nb.$1][nb.$2];
-          if (w == bombCell || w == goldCell || w == virusCell) queue.add(nb);
+          if (w == bombCell ||
+              w == goldCell ||
+              w == virusCell ||
+              w == chickCell) {
+            queue.add(nb);
+          }
         }
       }
       n++;
@@ -1003,6 +1088,11 @@ class BubbleGame {
       for (var b = 0; b < rowLen(a); b++) {
         final v = grid[a][b];
         if (v != null && !anchored.contains((a, b))) {
+          if (v == chickCell) {
+            grid[a][b] = null;
+            _saveChick(cellCenter(a, b));
+            continue;
+          }
           if (v == goldCell) _awardGold(cellCenter(a, b));
           particles.add(
             Particle(
@@ -1107,6 +1197,23 @@ class BubbleGame {
         }
       }
     }
+    if (cfg.rescue && chickTotal > 0) {
+      // renkli balon kalmadıysa hâlâ asılı yavrular kendiliğinden kurtulur
+      if (bubbleCount == 0) {
+        for (var a = 0; a < grid.length; a++) {
+          for (var b = 0; b < rowLen(a); b++) {
+            if (grid[a][b] == chickCell) {
+              grid[a][b] = null;
+              _saveChick(cellCenter(a, b));
+            }
+          }
+        }
+      }
+      if (chicksLeft == 0) {
+        _win();
+        return;
+      }
+    }
     if (bubbleCount == 0 && cfg.endless) {
       // sonsuz mod: ekran temizlendi → büyük bonus ve yeni sıralar
       score += 1000;
@@ -1120,35 +1227,7 @@ class BubbleGame {
       return;
     }
     if (bubbleCount == 0) {
-      // kalan taşlar ve bombalar ufalanıp düşer
-      for (var a = 0; a < grid.length; a++) {
-        for (var b = 0; b < rowLen(a); b++) {
-          final v = grid[a][b];
-          if (v != null) {
-            particles.add(
-              Particle(
-                cellCenter(a, b),
-                Offset(
-                  (rnd.nextDouble() - 0.5) * r * 6,
-                  -r * rnd.nextDouble() * 4,
-                ),
-                v,
-                true,
-              ),
-            );
-            grid[a][b] = null;
-            score += v == bombCell ? 100 : 30;
-          }
-        }
-      }
-      final ratio = movesLeft / totalMoves;
-      stars = ratio >= 0.3 ? 3 : (ratio >= 0.12 ? 2 : 1);
-      score += movesLeft * 50;
-      if (movesLeft > 0) {
-        praise = 'HAMLE BONUSU +${movesLeft * 50}';
-        praiseT = 1.6;
-      }
-      state = GameState.won;
+      _win();
       return;
     }
     if (grid.last.any((v) => v != null)) {
@@ -1162,6 +1241,39 @@ class BubbleGame {
     final present = _presentColors();
     if (!present.contains(current)) current = pickColor();
     if (!present.contains(next)) next = pickColor();
+  }
+
+  /// Bölüm kazanıldı: kalan taşlar, bombalar (kurtarmada kalan balonlar
+  /// da) ufalanıp düşer; kalan hamleler puana dönüşür.
+  void _win() {
+    for (var a = 0; a < grid.length; a++) {
+      for (var b = 0; b < rowLen(a); b++) {
+        final v = grid[a][b];
+        if (v != null) {
+          particles.add(
+            Particle(
+              cellCenter(a, b),
+              Offset(
+                (rnd.nextDouble() - 0.5) * r * 6,
+                -r * rnd.nextDouble() * 4,
+              ),
+              shownColor(v),
+              true,
+            ),
+          );
+          grid[a][b] = null;
+          score += v == bombCell ? 100 : 30;
+        }
+      }
+    }
+    final ratio = movesLeft / totalMoves;
+    stars = ratio >= 0.3 ? 3 : (ratio >= 0.12 ? 2 : 1);
+    score += movesLeft * 50;
+    if (movesLeft > 0) {
+      praise = 'HAMLE BONUSU +${movesLeft * 50}';
+      praiseT = 1.6;
+    }
+    state = GameState.won;
   }
 
   void _addRow() {

@@ -7,7 +7,7 @@ import 'package:balon_patlat/game.dart';
 /// Açgözlü bot: her açıyı (ve takası) dener, en çok balon eksilten atışı seçer.
 int botPlay(BubbleGame g, {int limit = 400}) {
   var used = 0;
-  while (g.bubbleCount > 0 && used < limit) {
+  while (g.state == GameState.playing && used < limit) {
     var bestScore = -1e9;
     var bestAngle = -pi / 2;
     var bestSwap = false;
@@ -18,12 +18,13 @@ int botPlay(BubbleGame g, {int limit = 400}) {
         s.movesLeft = 999;
         if (swap) s.swap();
         final before = s.bubbleCount;
+        final saved = s.chicksSaved;
         s.aimAngle = a;
         s.fire();
         for (var k = 0; k < 400 && s.ballPos != null; k++) {
           s.update(1 / 60);
         }
-        var val = (before - s.bubbleCount).toDouble();
+        var val = (before - s.bubbleCount) + (s.chicksSaved - saved) * 4.0;
         if (s.state == GameState.lostDanger) val -= 1000;
         if (val > bestScore) {
           bestScore = val;
@@ -41,6 +42,7 @@ int botPlay(BubbleGame g, {int limit = 400}) {
     }
     used++;
     if (g.state == GameState.lostDanger) return 9999;
+    if (g.state == GameState.lostMoves) g.state = GameState.playing;
   }
   return used;
 }

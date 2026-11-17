@@ -186,4 +186,12 @@ save("virus", lowpass(mix(
     tone(lambda t: 420 - t * 700 + 40 * math.sin(t * 90), 0.32, wave_fn=sq, vol=0.22),
     tone(lambda t: 210 - t * 300, 0.32, wave_fn=tri, vol=0.3),
 ), 0.3))
+# yavru kurtuldu: iki neşeli cik-cik + yükselen ıslık (sona eklendi)
+def chirp(f0, f1, d, vol):
+    return tone(lambda t: f0 + (f1 - f0) * t / d, d, wave_fn=math.sin, vol=vol)
+save("chick", mix(
+    chirp(2200, 3300, 0.07, 0.25),
+    [0] * int(0.11 * SR) + chirp(2400, 3600, 0.07, 0.25),
+    [0] * int(0.2 * SR) + tone(lambda t: note_hz(84) * (1 + t * 1.5), 0.25, wave_fn=tri, vol=0.14),
+))
 print("ok")

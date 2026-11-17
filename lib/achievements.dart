@@ -109,6 +109,16 @@ final achievements = <Achievement>[
     reward: const Reward(coins: 500, boosters: {Booster.laser: 2}),
   ),
   Achievement(
+    id: 'chick30',
+    title: 'Yavru Kurtarıcı',
+    desc: '30 yavruyu balondan kurtar',
+    icon: Icons.egg_rounded,
+    color: Color(0xFFFFD83D),
+    target: 30,
+    value: () => Progress.life('chick'),
+    reward: const Reward(coins: 300, boosters: {Booster.fire: 1}),
+  ),
+  Achievement(
     id: 'endless10k',
     title: 'Sonsuzluğa Adım',
     desc: 'Sonsuz Mod\'da 10.000 puan yap',

@@ -274,7 +274,10 @@ class _ShopTabState extends State<ShopTab> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Reklamları Kaldır', style: outfit(17, w: FontWeight.w900)),
+                Text(
+                  'Reklamları Kaldır',
+                  style: outfit(17, w: FontWeight.w900),
+                ),
                 Text(
                   'Bölüm arası reklamlar bir daha çıkmaz · +1.000 altın hediye',
                   style: jakarta(11, color: LP.muted),
@@ -508,26 +511,39 @@ class _ShopTabState extends State<ShopTab> {
           const SizedBox(height: 10),
           Row(
             children: [
-              Text(
-                formatNum(oldPrice),
-                style: outfit(
-                  15,
-                  color: LP.muted,
-                ).copyWith(decoration: TextDecoration.lineThrough),
+              Expanded(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Row(
+                    children: [
+                      Text(
+                        formatNum(oldPrice),
+                        style: outfit(
+                          15,
+                          color: LP.muted,
+                        ).copyWith(decoration: TextDecoration.lineThrough),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: LP.surfaceHighest,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          '%${((1 - price / oldPrice) * 100).round()} İNDİRİM',
+                          style: outfit(11, color: LP.gold),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
               const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: LP.surfaceHighest,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  '%${((1 - price / oldPrice) * 100).round()} İNDİRİM',
-                  style: outfit(11, color: LP.gold),
-                ),
-              ),
-              const Spacer(),
               SizedBox(
                 width: 120,
                 child: JuicyButton.gold(
